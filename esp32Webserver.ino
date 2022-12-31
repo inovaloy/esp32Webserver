@@ -1,6 +1,7 @@
 #include <WiFi.h>
 #include "webServer.h"
 #include "httpClinet.h"
+#include "sd_card.h"
 #include "LiquidCrystal_I2C.h"
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
@@ -51,6 +52,7 @@ void setup()
     lcd.print(WiFi.localIP());
 
     getHttpClient();
+    readSdCard();
 }
 
 void loop()
