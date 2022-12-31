@@ -1,5 +1,5 @@
 #include <WiFi.h>
-#include "webServer.h"
+#include "autoGenWebServer.h"
 #include "httpClinet.h"
 #include "sd_card.h"
 #include "LiquidCrystal_I2C.h"
@@ -9,8 +9,8 @@ int counter = 0;
 
 void setup()
 {
-    const char* ssid     = "*************";
-    const char* password = "*************";
+    const char* ssid     = "Touch Your Heart";
+    const char* password = "Arghya&Arpita";
 
     bool ledStatus = LOW;
 

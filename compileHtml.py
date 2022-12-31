@@ -2,10 +2,13 @@ import gzip
 import os
 import io
 import shutil
+import json
 
-HTML_DIR = "html"
-BUILD_DIR = "_tmp"
-AUTOGEN_HTML_FILE = "htmlData.h"
+HTML_DIR          = "html"
+BUILD_DIR         = "_tmp"
+AUTOGEN_HTML_FILE = "autoGenHtmlData.h"
+AUTOGEN_INFO_FILE = "autoGenInfo.json"
+InfoData = {}
 
 def str2hex(decimal):
     hexadecimal = "0x"+hex(decimal)[2:].zfill(2).upper()
@@ -30,12 +33,7 @@ def createHeaderFile():
     h.close()
 
 
-def updateHeaderFile(zipName, zipData):
-    zipDataLength = len(zipData)
-    print("File:", zipName, "\tLength:", zipDataLength)
-    arrStrName = convertToCamelCase(zipName)
-    arrStrLength = arrStrName+"Len"
-
+def updateHeaderFile(zipName, zipData, zipDataLength, arrStrName, arrStrLength):
     h = io.open(os.path.join(BUILD_DIR, AUTOGEN_HTML_FILE), "a", newline='\n')
     h.write("""
 // File: """+str(zipName)+""", Size: """+str(zipDataLength)+"""
@@ -65,6 +63,7 @@ const uint8_t """+arrStrName+"""[] = {
 
 
 def createZipFiles():
+    global InfoData
     htmlFiles = os.listdir(HTML_DIR)
     if not os.path.exists(BUILD_DIR):
         os.mkdir(BUILD_DIR)
@@ -78,11 +77,16 @@ def createZipFiles():
             fp = open(os.path.join(HTML_DIR, htmlFile),"rb")
             data = fp.read()
             bindata = bytearray(data)
-            with gzip.open(os.path.join(BUILD_DIR, htmlFile+".gz"), "wb") as f:
+            zipFileName = htmlFile+".gz"
+            InfoData[htmlFile] = {}
+            InfoData[htmlFile]["zipFileName"] = zipFileName
+            zipFilePath = os.path.join(BUILD_DIR, zipFileName)
+            with gzip.open(zipFilePath, "wb") as f:
                 f.write(bindata)
 
 
 def readZipFile():
+    global InfoData
     zipFiles = os.listdir(BUILD_DIR)
 
     for zipFile in zipFiles:
@@ -94,11 +98,25 @@ def readZipFile():
             if not os.path.exists(os.path.join(BUILD_DIR, AUTOGEN_HTML_FILE)):
                 createHeaderFile()
 
-            updateHeaderFile(zipFile, zipData)
+            zipDataLength = len(zipData)
+            print("File:", zipFile, "\tLength:", zipDataLength)
+            arrStrName = convertToCamelCase(zipFile)
+            arrStrLength = arrStrName+"Len"
+
+            for key in InfoData:
+                if InfoData[key]["zipFileName"] == zipFile:
+                    InfoData[key]["zipDataLength"] = zipDataLength
+                    InfoData[key]["arrStrName"] = arrStrName
+                    InfoData[key]["arrStrLength"] = arrStrLength
+                    break
+
+            updateHeaderFile(zipFile, zipData, zipDataLength, arrStrName, arrStrLength)
 
     if os.path.exists(os.path.join(BUILD_DIR, AUTOGEN_HTML_FILE)):
         shutil.copy(os.path.join(BUILD_DIR, AUTOGEN_HTML_FILE), AUTOGEN_HTML_FILE)
 
+    with open(os.path.join(BUILD_DIR, AUTOGEN_INFO_FILE), 'w') as autoGenInfoFile:
+        autoGenInfoFile.write(json.dumps(InfoData, indent=4))
 
 def main():
     createZipFiles()

@@ -1,0 +1,38 @@
+{
+    "/" : {
+        "fileName"     : "index.html",
+        "macro"        : "INDEX_HTML",
+        "userFunc"     : "yes",
+        "autoReturn"   : "yes"
+    },
+    "/index" : {
+        "fileName"     : "index.html",
+        "macro"        : "INDEX_HTML",
+        "userFunc"     : "yes",
+        "autoReturn"   : "yes"
+    },
+    "/home" : {
+        "fileName"     : "home.html",
+        "macro"        : "HOME_HTML",
+        "userFunc"     : "yes",
+        "autoReturn"   : "yes"
+    },
+    "/dshbrd" : {
+        "fileName"     : "dashboard.html",
+        "macro"        : "DASHBOARD_HTML",
+        "userFunc"     : "yes",
+        "autoReturn"   : "yes"
+    },
+    "/login" : {
+        "fileName"     : "login.html",
+        "macro"        : "LOGIN_HTML",
+        "userFunc"     : "yes",
+        "autoReturn"   : "yes"
+    },
+    "/logout" : {
+        "fileName"     : "logout.html",
+        "macro"        : "LOGOUT_HTML",
+        "userFunc"     : "yes",
+        "autoReturn"   : "yes"
+    }
+}

@@ -1,30 +1,35 @@
 #include "esp_http_server.h"
-#include "htmlData.h"
+#include "AutoGenHtmlData.h"
 #include "Arduino.h"
+#include "AutoGenWebServer.h"
 #include "webServer.h"
 
-httpd_handle_t webServerHttpd = NULL;
 
+void webHandelerHook(webServerMacro hook)
+{
+    switch (hook)
+    {
+    case INDEX_HTML:
+        Serial.println("from INDEX_HTML");
+        break;
 
-static esp_err_t indexHandler(httpd_req_t *req){
-    httpd_resp_set_type(req, "text/html");
-    httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
-    return httpd_resp_send(req, (const char *)indexHtmlGz, indexHtmlGzLen);
-}
+    case HOME_HTML:
+        Serial.println("from HOME_HTML");
+        break;
 
+    case DASHBOARD_HTML:
+        Serial.println("from DASHBOARD_HTML");
+        break;
 
-void startWebServer(){
-    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    case LOGIN_HTML:
+        Serial.println("from LOGIN_HTML");
+        break;
 
-    httpd_uri_t indexUri = {
-        .uri       = "/",
-        .method    = HTTP_GET,
-        .handler   = indexHandler,
-        .user_ctx  = NULL
-    };
+    case LOGOUT_HTML:
+        Serial.println("from LOGOUT_HTML");
+        break;
 
-    Serial.printf("Starting web server on port: '%d'\n", config.server_port);
-    if (httpd_start(&webServerHttpd, &config) == ESP_OK) {
-        httpd_register_uri_handler(webServerHttpd, &indexUri);
+    default:
+        break;
     }
 }
