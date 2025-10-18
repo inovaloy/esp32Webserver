@@ -8,7 +8,7 @@ void readSdCard()
         return;
     }
 
-    File file = SD_MMC.open("/test.txt", FILE_WRITE);
+    File file = SD_MMC.open("/abc.txt", FILE_WRITE);
 
     if (!file)
     {
@@ -27,7 +27,7 @@ void readSdCard()
 
     file.close();
 
-    File file2 = SD_MMC.open("/test.txt", FILE_READ);
+    File file2 = SD_MMC.open("/abc.txt", FILE_READ);
 
     if (!file2)
     {

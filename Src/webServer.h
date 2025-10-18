@@ -1,7 +1,7 @@
 #ifndef WEBSERVER_H
 #define WEBSERVER_H
 
-#include "autoGenWebServer.h"
+#include "AutoGen/autoGenWebServer.h"
 
 void webHandelerHook(webServerMacro hook);
 #endif

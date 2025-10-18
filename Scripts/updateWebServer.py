@@ -4,12 +4,13 @@ import io
 import shutil
 
 HTML_DIR                    = "html"
-BUILD_DIR                   = "_tmp"
+BUILD_DIR                   = ".temp/AutoGen"
 LINKER_FILE                 = "linkerData.json"
 AUTOGEN_HTML_FILE           = "AutoGenHtmlData.h"
 AUTOGEN_INFO_FILE           = "autoGenInfo.json"
 AUTOGEN_WEB_SERVER_CPP_FILE = "autoGenWebServer.cpp"
 AUTOGEN_WEB_SERVER_H_FILE   = "autoGenWebServer.h"
+AUTOGEN_DEST_DIR            = "Src/AutoGen"
 
 handlerFunctions = []
 uriDefinations   = []
@@ -111,10 +112,10 @@ def updateWebServerCppFile():
 */
 
 #include "esp_http_server.h"
-#include "AutoGenHtmlData.h"
+#include "AutoGen/autoGenHtmlData.h"
 #include "Arduino.h"
 #include "webServer.h"
-#include "AutoGenWebServer.h"
+#include "AutoGen/autoGenWebServer.h"
 
 httpd_handle_t webServerHttpd = NULL;
 """
@@ -151,7 +152,12 @@ void startWebServer(){
     createWebServerFile(webServerData)
 
     if os.path.exists(os.path.join(BUILD_DIR, AUTOGEN_WEB_SERVER_CPP_FILE)):
-        shutil.copy(os.path.join(BUILD_DIR, AUTOGEN_WEB_SERVER_CPP_FILE), AUTOGEN_WEB_SERVER_CPP_FILE)
+        if not os.path.exists(AUTOGEN_DEST_DIR):
+            os.makedirs(AUTOGEN_DEST_DIR, exist_ok = True)
+        shutil.copy(
+            os.path.join(BUILD_DIR, AUTOGEN_WEB_SERVER_CPP_FILE),
+            os.path.join(AUTOGEN_DEST_DIR, AUTOGEN_WEB_SERVER_CPP_FILE)
+        )
 
 
 def updateWebServerHFile():
@@ -188,7 +194,9 @@ void startWebServer();
     webServerFile.close()
 
     if os.path.exists(webServerHFileName):
-        shutil.copy(webServerHFileName, AUTOGEN_WEB_SERVER_H_FILE)
+        if not os.path.exists(AUTOGEN_DEST_DIR):
+            os.makedirs(AUTOGEN_DEST_DIR, exist_ok = True)
+        shutil.copy(webServerHFileName, os.path.join(AUTOGEN_DEST_DIR, AUTOGEN_WEB_SERVER_H_FILE))
 
 
 def main():

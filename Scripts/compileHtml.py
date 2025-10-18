@@ -5,9 +5,10 @@ import shutil
 import json
 
 HTML_DIR          = "html"
-BUILD_DIR         = "_tmp"
+BUILD_DIR         = ".temp/AutoGen"
 AUTOGEN_HTML_FILE = "autoGenHtmlData.h"
 AUTOGEN_INFO_FILE = "autoGenInfo.json"
+AUTOGEN_DEST_DIR  = "Src/AutoGen"
 InfoData = {}
 
 def str2hex(decimal):
@@ -29,6 +30,8 @@ def createHeaderFile():
     h.write("""/*
 * This is a autogen file; Do not change manually
 */
+
+#include <stdint.h>
 """)
     h.close()
 
@@ -66,7 +69,7 @@ def createZipFiles():
     global InfoData
     htmlFiles = os.listdir(HTML_DIR)
     if not os.path.exists(BUILD_DIR):
-        os.mkdir(BUILD_DIR)
+        os.makedirs(BUILD_DIR, exist_ok = True)
     else:
         files = os.listdir(os.path.join(BUILD_DIR))
         for f in files:
@@ -113,7 +116,13 @@ def readZipFile():
             updateHeaderFile(zipFile, zipData, zipDataLength, arrStrName, arrStrLength)
 
     if os.path.exists(os.path.join(BUILD_DIR, AUTOGEN_HTML_FILE)):
-        shutil.copy(os.path.join(BUILD_DIR, AUTOGEN_HTML_FILE), AUTOGEN_HTML_FILE)
+        if not os.path.exists(AUTOGEN_DEST_DIR):
+            os.makedirs(AUTOGEN_DEST_DIR, exist_ok = True)
+
+        shutil.copy(
+            os.path.join(BUILD_DIR, AUTOGEN_HTML_FILE),
+            os.path.join(AUTOGEN_DEST_DIR, AUTOGEN_HTML_FILE)
+        )
 
     with open(os.path.join(BUILD_DIR, AUTOGEN_INFO_FILE), 'w') as autoGenInfoFile:
         autoGenInfoFile.write(json.dumps(InfoData, indent=4))
