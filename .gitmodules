@@ -1,0 +1,11 @@
+[submodule "Libs/Adafruit_BusIO"]
+	path = Libs/Adafruit_BusIO
+	url = https://github.com/adafruit/Adafruit_BusIO
+
+[submodule "Libs/Adafruit-GFX-Library"]
+	path = Libs/Adafruit-GFX-Library
+	url = https://github.com/adafruit/Adafruit-GFX-Library
+
+[submodule "Libs/Adafruit_SSD1306"]
+	path = Libs/Adafruit_SSD1306
+	url = https://github.com/adafruit/Adafruit_SSD1306

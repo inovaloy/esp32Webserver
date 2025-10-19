@@ -49,7 +49,7 @@ static esp_err_t """+handlerName+"""(httpd_req_t *req){
     httpd_resp_set_type(req, "text/html");
     httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
     webHandelerHook("""+hook+""");
-    return httpd_resp_send(req, (const char *)"""+arrStrName+""", """+arrStrLength+""");
+    return send_large_response(req, (const char *)"""+arrStrName+""", """+arrStrLength+""");
 }
 """
     return funcData
@@ -118,6 +118,24 @@ def updateWebServerCppFile():
 #include "AutoGen/autoGenWebServer.h"
 
 httpd_handle_t webServerHttpd = NULL;
+
+// Helper function to send large content in chunks
+static esp_err_t send_large_response(httpd_req_t *req, const char* data, size_t data_len) {
+    const size_t chunk_size = 1024; // Send in 1KB chunks
+    size_t remaining = data_len;
+
+    while (remaining > 0) {
+        size_t to_send = (remaining > chunk_size) ? chunk_size : remaining;
+        if (httpd_resp_send_chunk(req, data, to_send) != ESP_OK) {
+            return ESP_FAIL;
+        }
+        data += to_send;
+        remaining -= to_send;
+    }
+
+    // Send empty chunk to signal end
+    return httpd_resp_send_chunk(req, NULL, 0);
+}
 """
 
     # Add handler Fuctions
@@ -128,6 +146,13 @@ httpd_handle_t webServerHttpd = NULL;
     webServerData += """
 void startWebServer(){
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+
+    // Increase limits for larger responses
+    config.max_resp_headers = 16;     // Increase max response headers
+    config.stack_size = 8192;         // Increase stack size (default is 4096)
+    config.task_priority = 5;         // Set task priority
+    config.core_id = tskNO_AFFINITY;  // Allow task to run on any core
+    config.max_open_sockets = 7;      // Increase max open sockets if needed
 """
 
     # Add Uri definations
