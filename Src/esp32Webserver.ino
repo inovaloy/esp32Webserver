@@ -1,6 +1,6 @@
 #include <WiFi.h>
 #include "AutoGen/autoGenWebServer.h"
-#include "httpClient.h"
+// #include "httpClient.h"
 // #include "sd_card.h"
 // #include "LiquidCrystal_I2C.h"
 #include <SPI.h>
@@ -82,7 +82,7 @@ void setup()
     display.print(WiFi.localIP());
     display.display();
 
-    getHttpClient();
+    // getHttpClient(); // Removed - HTTPClient not used
 }
 
 void loop()
