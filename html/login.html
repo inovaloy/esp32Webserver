@@ -1,9 +1,173 @@
 <html>
     <head>
         <title>ESP32 Webserver Login</title>
+        <style>
+            body {font-family: Arial, sans-serif; max-width: 400px; margin: 50px auto; padding: 20px; background-color: #f5f5f5;}
+            .login-container {background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);}
+            .form-group {margin-bottom: 15px;}
+            label {display: block; margin-bottom: 5px; font-weight: bold;}
+            input[type="text"], input[type="password"] {width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;}
+            .btn {background-color: #007bff; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px;}
+            .btn:hover {background-color: #0056b3;}
+            .nav-links {text-align: center; margin-top: 20px;}
+            .nav-links a {color: #007bff; text-decoration: none; margin: 0 10px;}
+            .response {margin-top: 15px; padding: 10px; border-radius: 4px; display: none;}
+            .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+            .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        </style>
     </head>
     <body>
-        <h1 style="text-align: center;">ESP32 Webserver Login</h1>
-        <a href="/">Index</a>
+        <div class="login-container">
+            <h1 style="text-align: center;">ESP32 Login</h1>
+
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="username">Username:</label>
+                    <input type="text" id="username" name="username" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+
+                <button type="submit" class="btn">Login</button>
+            </form>
+
+            <div id="response" class="response"></div>
+
+            <div class="nav-links">
+                <a href="/">Home</a> |
+                <a href="#" onclick="showRegisterForm()">Register</a>
+            </div>
+        </div>
+
+        <!-- Registration Form (hidden by default) -->
+        <div id="registerContainer" class="login-container" style="display: none;">
+            <h1 style="text-align: center;">ESP32 Register</h1>
+
+            <form id="registerForm">
+                <div class="form-group">
+                    <label for="regUsername">Username:</label>
+                    <input type="text" id="regUsername" name="username" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="regPassword">Password:</label>
+                    <input type="password" id="regPassword" name="password" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="regEmail">Email:</label>
+                    <input type="text" id="regEmail" name="email" required>
+                </div>
+
+                <button type="submit" class="btn">Register</button>
+            </form>
+
+            <div id="regResponse" class="response"></div>
+
+            <div class="nav-links">
+                <a href="/">Home</a> |
+                <a href="#" onclick="showLoginForm()">Back to Login</a>
+            </div>
+        </div>
+
+        <script>
+            // Show/Hide forms
+            function showRegisterForm() {
+                document.querySelector('.login-container').style.display = 'none';
+                document.getElementById('registerContainer').style.display = 'block';
+            }
+
+            function showLoginForm() {
+                document.querySelector('.login-container').style.display = 'block';
+                document.getElementById('registerContainer').style.display = 'none';
+            }
+
+            // Handle login form submission
+            document.getElementById('loginForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+
+                const formData = {
+                    username: document.getElementById('username').value,
+                    password: document.getElementById('password').value
+                };
+                console.log('Login form data:', formData);
+                console.log(JSON.stringify(formData));
+
+                try {
+                    const response = await fetch('/api/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(formData)
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        showResponse('response', data, true);
+
+                        if (data.success) {
+                            // Redirect on successful login
+                            setTimeout(() => {
+                                window.location.href = '/dshbrd';
+                            }, 1500);
+                        }
+                    } else {
+                        showResponse('response', { message: 'Login failed: Status ' + response.status }, false);
+                    }
+                } catch (error) {
+                    showResponse('response', { message: 'Network error: ' + error.message }, false);
+                }
+            });
+
+            // Handle registration form submission
+            document.getElementById('registerForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+
+                const formData = {
+                    username: document.getElementById('regUsername').value,
+                    password: document.getElementById('regPassword').value,
+                    email: document.getElementById('regEmail').value
+                };
+
+                try {
+                    const response = await fetch('/api/register', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(formData)
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        showResponse('regResponse', data, true);
+
+                        if (data.success) {
+                            // Switch to login form after successful registration
+                            setTimeout(() => {
+                                showLoginForm();
+                                document.getElementById('registerForm').reset();
+                            }, 1500);
+                        }
+                    } else {
+                        showResponse('regResponse', { message: 'Registration failed: Status ' + response.status }, false);
+                    }
+                } catch (error) {
+                    showResponse('regResponse', { message: 'Network error: ' + error.message }, false);
+                }
+            });
+
+            // Helper function to show response messages
+            function showResponse(elementId, data, isSuccess) {
+                const responseDiv = document.getElementById(elementId);
+                responseDiv.style.display = 'block';
+                responseDiv.className = 'response ' + (isSuccess ? 'success' : 'error');
+                responseDiv.textContent = data.message || 'Unknown response';
+            }
+        </script>
     </body>
 </html>

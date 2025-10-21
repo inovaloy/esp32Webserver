@@ -13,8 +13,8 @@ void getHttpClient()
         if (httpCode > 0) //Check for the returning code
         {
             String payload = http.getString();
-            Serial.println(httpCode);
-            Serial.println(payload);
+            // Serial.println(httpCode);
+            // Serial.println(payload);
         }
 
         else

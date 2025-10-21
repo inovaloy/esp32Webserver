@@ -3,6 +3,7 @@
 #include "AutoGen/autoGenWebServer.h"
 #include "Arduino.h"
 #include "webServer.h"
+#include "webServerHelper.h"
 #include <cJSON.h>
 
 
@@ -35,23 +36,79 @@ void webHandlerHook(webServerMacro hook)
     }
 }
 
-// Hooks for API handlers
-char* apiTestHandlerHook(){
-    cJSON *json = cJSON_CreateObject();
-    cJSON *controls = cJSON_CreateObject();
 
-    cJSON_AddBoolToObject(controls, "ledState", 1);
-    cJSON_AddBoolToObject(controls, "status", 0);
-    cJSON_AddItemToObject(json, "controls", controls);
+// Login handler hook
+char* apiLoginHandlerHook(httpd_req_t *req) {
+    char* jsonData = getContentFromReq(req);
+    if (jsonData == nullptr) {
+        // Handle error: failed to get content
+        Serial.println("Error: Failed to get content from request");
+        return nullptr;
+    }
+    Serial.println("LOGIN HANDLER SUCCESS! Received data:");
+    Serial.println(jsonData);
 
-    char *json_string = cJSON_Print(json);
-    Serial.println(json_string);
-    cJSON_Delete(json);
-    return json_string;
+    cJSON *response = cJSON_CreateObject();
+    cJSON_AddBoolToObject(response, "success", true);
+    cJSON_AddStringToObject(response, "message", "Login test successful!");
+    cJSON_AddStringToObject(response, "received", jsonData);
+
+    char *response_string = cJSON_Print(response);
+    cJSON_Delete(response);
+    return response_string;
 }
 
 
-char* apiServerHandlerHook(){
-    Serial.println("from API Server Handler Hook");
-    return nullptr;
+// Registration handler hook - receives JSON data from browser
+char* apiRegisterHandlerHook(httpd_req_t *req) {
+    char* jsonData = getContentFromReq(req);
+    if (jsonData == nullptr) {
+        // Handle error: failed to get content
+        Serial.println("Error: Failed to get content from request");
+        return nullptr;
+    }
+    Serial.println("Registration attempt received:");
+    Serial.println(jsonData);
+
+    cJSON *json = cJSON_Parse(jsonData);
+    cJSON *response = cJSON_CreateObject();
+
+    if (json == NULL) {
+        cJSON_AddBoolToObject(response, "success", false);
+        cJSON_AddStringToObject(response, "message", "Invalid JSON data");
+    } else {
+        cJSON *username = cJSON_GetObjectItem(json, "username");
+        cJSON *password = cJSON_GetObjectItem(json, "password");
+        cJSON *email = cJSON_GetObjectItem(json, "email");
+
+        if (cJSON_IsString(username) && cJSON_IsString(password) && cJSON_IsString(email)) {
+            String user = String(username->valuestring);
+            String pass = String(password->valuestring);
+            String userEmail = String(email->valuestring);
+
+            Serial.printf("Registration attempt - Username: %s, Email: %s\n", user.c_str(), userEmail.c_str());
+
+            // Simple registration logic (replace with your own)
+            // Here you would typically save to EEPROM, SD card, or external storage
+            if (user.length() >= 3 && pass.length() >= 6) {
+                cJSON_AddBoolToObject(response, "success", true);
+                cJSON_AddStringToObject(response, "message", "Registration successful! You can now login.");
+
+                // In a real implementation, you would save the user data
+                Serial.printf("New user registered: %s (%s)\n", user.c_str(), userEmail.c_str());
+            } else {
+                cJSON_AddBoolToObject(response, "success", false);
+                cJSON_AddStringToObject(response, "message", "Username must be at least 3 characters and password at least 6 characters");
+            }
+        } else {
+            cJSON_AddBoolToObject(response, "success", false);
+            cJSON_AddStringToObject(response, "message", "Username, password, and email are required");
+        }
+
+        cJSON_Delete(json);
+    }
+
+    char *response_string = cJSON_Print(response);
+    cJSON_Delete(response);
+    return response_string;
 }

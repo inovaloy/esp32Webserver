@@ -1,11 +1,12 @@
-#ifndef WEBSERVER_H
-#define WEBSERVER_H
+#ifndef WEB_SERVER_H
+#define WEB_SERVER_H
 
 #include "AutoGen/autoGenWebServer.h"
 
 void webHandlerHook(webServerMacro hook);
 
 // Hooks for API handlers
-char* apiTestHandlerHook();
-char* apiServerHandlerHook();
-#endif
+char* apiLoginHandlerHook(httpd_req_t *req);
+char* apiRegisterHandlerHook(httpd_req_t *req);
+
+#endif // WEB_SERVER_H
