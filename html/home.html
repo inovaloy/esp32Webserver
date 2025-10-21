@@ -1,9 +1,201 @@
-<html>
-    <head>
-        <title>ESP32 Webserver Home</title>
-    </head>
-    <body>
-        <h1 style="text-align: center;">ESP32 Webserver Home</h1>
-        <a href="/">Index</a>
-    </body>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 IoT Control Center</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#333;line-height:1.6;min-height:100vh}
+        .container{max-width:1200px;margin:0 auto;padding:20px}
+        header{background:rgba(255,255,255,0.95);backdrop-filter:blur(15px);border-radius:20px;padding:40px;margin-bottom:30px;text-align:center;box-shadow:0 10px 40px rgba(31,38,135,0.37);position:relative;overflow:hidden}
+        header::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,#4299e1,#667eea,#764ba2,#f093fb)}
+        .hero-title{color:#2d3748;font-size:3.5em;margin-bottom:15px;text-shadow:2px 2px 8px rgba(0,0,0,0.1);background:linear-gradient(135deg,#4299e1,#667eea);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+        .hero-subtitle{color:#718096;font-size:1.4em;margin-bottom:30px;font-weight:300}
+        .hero-description{color:#4a5568;font-size:1.1em;max-width:600px;margin:0 auto 30px}
+        .nav-container{display:flex;justify-content:center;gap:20px;flex-wrap:wrap;margin-bottom:20px}
+        .nav-btn{background:linear-gradient(45deg,#4299e1,#3182ce);color:white;padding:15px 30px;text-decoration:none;border-radius:30px;transition:all 0.3s ease;box-shadow:0 6px 20px rgba(66,153,225,0.3);font-weight:600;text-transform:uppercase;letter-spacing:1px}
+        .nav-btn:hover{transform:translateY(-3px);box-shadow:0 12px 30px rgba(66,153,225,0.4)}
+        .nav-btn.primary{background:linear-gradient(45deg,#48bb78,#38a169);box-shadow:0 6px 20px rgba(72,187,120,0.3)}
+        .nav-btn.secondary{background:linear-gradient(45deg,#ed8936,#dd6b20);box-shadow:0 6px 20px rgba(237,137,54,0.3)}
+        .features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:25px;margin-bottom:40px}
+        .feature-card{background:rgba(255,255,255,0.95);backdrop-filter:blur(15px);border-radius:20px;padding:30px;box-shadow:0 10px 40px rgba(31,38,135,0.37);transition:all 0.3s ease}
+        .feature-card:hover{transform:translateY(-8px);box-shadow:0 20px 50px rgba(31,38,135,0.5)}
+        .feature-icon{width:60px;height:60px;background:linear-gradient(135deg,#4299e1,#667eea);border-radius:15px;display:flex;align-items:center;justify-content:center;font-size:24px;color:white;margin-bottom:20px;box-shadow:0 4px 15px rgba(66,153,225,0.3)}
+        .feature-card h3{color:#2d3748;font-size:1.5em;margin-bottom:15px;font-weight:600}
+        .feature-card p{color:#718096;line-height:1.7;margin-bottom:20px}
+        .feature-list{list-style:none}
+        .feature-list li{color:#4a5568;margin-bottom:8px;position:relative;padding-left:20px}
+        .feature-list li::before{content:'✓';position:absolute;left:0;color:#48bb78;font-weight:bold}
+        .stats-section{background:rgba(255,255,255,0.95);backdrop-filter:blur(15px);border-radius:20px;padding:40px;margin-bottom:30px;box-shadow:0 10px 40px rgba(31,38,135,0.37)}
+        .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:30px;text-align:center}
+        .stat-item{padding:20px;border-radius:15px;background:linear-gradient(135deg,rgba(66,153,225,0.1),rgba(102,126,234,0.1))}
+        .stat-number{font-size:2.5em;font-weight:bold;color:#4299e1;margin-bottom:10px;text-shadow:1px 1px 3px rgba(0,0,0,0.1)}
+        .stat-label{color:#718096;font-size:1.1em;font-weight:500}
+        .quick-actions{background:rgba(255,255,255,0.95);backdrop-filter:blur(15px);border-radius:20px;padding:30px;margin-bottom:30px;box-shadow:0 10px 40px rgba(31,38,135,0.37)}
+        .quick-actions h2{color:#2d3748;margin-bottom:25px;text-align:center;font-size:2em}
+        .action-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:15px}
+        .action-btn{background:linear-gradient(135deg,#48bb78,#38a169);color:white;border:none;padding:20px;border-radius:15px;cursor:pointer;transition:all 0.3s ease;font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;box-shadow:0 4px 15px rgba(72,187,120,0.3)}
+        .action-btn:hover{transform:translateY(-2px);box-shadow:0 8px 25px rgba(72,187,120,0.4)}
+        .action-btn.warning{background:linear-gradient(135deg,#ed8936,#dd6b20);box-shadow:0 4px 15px rgba(237,137,54,0.3)}
+        .action-btn.danger{background:linear-gradient(135deg,#f56565,#e53e3e);box-shadow:0 4px 15px rgba(245,101,101,0.3)}
+        .system-info{background:linear-gradient(135deg,rgba(45,55,72,0.9),rgba(26,32,44,0.9));color:white;border-radius:20px;padding:30px;margin-bottom:30px;box-shadow:0 10px 40px rgba(0,0,0,0.3)}
+        .system-info h2{margin-bottom:20px;text-align:center;font-size:1.8em}
+        .info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px}
+        .info-item{display:flex;justify-content:space-between;padding:15px;background:rgba(255,255,255,0.1);border-radius:10px;backdrop-filter:blur(10px)}
+        .info-label{color:#a0aec0}
+        .info-value{color:#4299e1;font-weight:bold}
+        .footer{text-align:center;padding:30px;color:rgba(255,255,255,0.9);background:rgba(0,0,0,0.2);border-radius:20px;backdrop-filter:blur(10px)}
+        .footer p{margin-bottom:10px}
+        .status-indicator{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:8px;animation:pulse 2s infinite}
+        .status-online{background-color:#48bb78}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.7}}
+        @media (max-width:768px){
+            .container{padding:15px}
+            .hero-title{font-size:2.5em}
+            header{padding:25px}
+            .features-grid{grid-template-columns:1fr}
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1 class="hero-title">ESP32 IoT Control Center</h1>
+            <p class="hero-subtitle">Advanced Home Automation & Monitoring System</p>
+            <p class="hero-description">
+                Welcome to your intelligent ESP32-powered smart home hub. Control devices, monitor sensors,
+                and manage your connected ecosystem from anywhere with our responsive web interface.
+            </p>
+            <div class="nav-container">
+                <a href="/dshbrd" class="nav-btn primary">📊 Dashboard</a>
+                <a href="/index" class="nav-btn">🏠 Home</a>
+                <a href="/login" class="nav-btn secondary">🔐 Login</a>
+                <a href="/logout" class="nav-btn">🚪 Logout</a>
+            </div>
+        </header>
+
+        <div class="stats-section">
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-number">24/7</div>
+                    <div class="stat-label">System Uptime</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">15</div>
+                    <div class="stat-label">Connected Devices</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">98.5%</div>
+                    <div class="stat-label">System Reliability</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">156KB</div>
+                    <div class="stat-label">Free Memory</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">🏡</div>
+                <h3>Smart Home Control</h3>
+                <p>Comprehensive control over your smart home devices with real-time status updates.</p>
+                <ul class="feature-list">
+                    <li>LED lighting control</li>
+                    <li>Smart relay switching</li>
+                    <li>Motor and servo control</li>
+                    <li>Temperature regulation</li>
+                </ul>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">📡</div>
+                <h3>IoT Sensor Network</h3>
+                <p>Advanced sensor monitoring with data logging and alert systems.</p>
+                <ul class="feature-list">
+                    <li>Temperature & humidity sensors</li>
+                    <li>Air quality monitoring</li>
+                    <li>Motion detection</li>
+                    <li>Light level sensing</li>
+                </ul>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">📱</div>
+                <h3>Mobile Responsive</h3>
+                <p>Fully responsive web interface for all devices and screen sizes.</p>
+                <ul class="feature-list">
+                    <li>Mobile-optimized interface</li>
+                    <li>Touch-friendly controls</li>
+                    <li>Progressive web app</li>
+                    <li>Offline capability</li>
+                </ul>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🔒</div>
+                <h3>Security & Privacy</h3>
+                <p>Enterprise-grade security features to protect your network.</p>
+                <ul class="feature-list">
+                    <li>Encrypted communications</li>
+                    <li>User authentication</li>
+                    <li>Access control</li>
+                    <li>Security audit logs</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="quick-actions">
+            <h2>Quick Actions</h2>
+            <div class="action-grid">
+                <button class="action-btn">🔆 All Lights On</button>
+                <button class="action-btn">🌙 Night Mode</button>
+                <button class="action-btn">🏠 Home Mode</button>
+                <button class="action-btn">🚪 Away Mode</button>
+                <button class="action-btn warning">⚠️ Alert Mode</button>
+                <button class="action-btn">❄️ AC Control</button>
+                <button class="action-btn">🔥 Heater On</button>
+                <button class="action-btn">🎵 Music System</button>
+                <button class="action-btn danger">🚨 Emergency</button>
+                <button class="action-btn danger">🔄 System Reset</button>
+            </div>
+        </div>
+
+        <div class="system-info">
+            <h2><span class="status-indicator status-online"></span>System Information</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Device Model</span>
+                    <span class="info-value">ESP32-D0WDQ6</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Firmware Version</span>
+                    <span class="info-value">v2.1.0</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">WiFi Status</span>
+                    <span class="info-value">Connected</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">IP Address</span>
+                    <span class="info-value">192.168.1.100</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Signal Strength</span>
+                    <span class="info-value">-42 dBm</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">CPU Temperature</span>
+                    <span class="info-value">41°C</span>
+                </div>
+            </div>
+        </div>
+
+        <footer class="footer">
+            <p>&copy; 2025 ESP32 IoT Control Center | Advanced Home Automation System</p>
+            <p>Powered by ESP-IDF Framework | Build v2.1.0 | Last Updated: October 19, 2025</p>
+        </footer>
+    </div>
+</body>
 </html>

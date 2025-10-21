@@ -1,9 +1,107 @@
+<!DOCTYPE html>
 <html>
-    <head>
-        <title>ESP32 Webserver Dashboard</title>
-    </head>
-    <body>
-        <h1 style="text-align: center;">ESP32 Webserver Dashboard</h1>
-        <a href="/">Index</a>
-    </body>
+<head>
+    <title>ESP32 Dashboard</title>
+    <style>
+        body{font-family:Arial;background:linear-gradient(135deg,#667eea,#764ba2);color:#333;margin:0;padding:20px}
+        .container{max-width:800px;margin:0 auto}
+        header{background:rgba(255,255,255,0.9);border-radius:10px;padding:20px;margin-bottom:20px;text-align:center;box-shadow:0 4px 15px rgba(0,0,0,0.1)}
+        h1{color:#4a5568;font-size:2em;margin:10px 0}
+        .nav{display:flex;justify-content:center;gap:10px;margin-top:15px}
+        .btn{background:#4299e1;color:white;padding:10px 20px;text-decoration:none;border-radius:20px}
+        .btn:hover{background:#3182ce}
+        .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px;margin-bottom:20px}
+        .card{background:rgba(255,255,255,0.9);border-radius:10px;padding:20px;box-shadow:0 4px 15px rgba(0,0,0,0.1)}
+        .card h2{color:#2d3748;margin-bottom:15px;border-bottom:2px solid #4299e1;padding-bottom:5px}
+        .metric{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #e2e8f0}
+        .metric:last-child{border-bottom:none}
+        .value{font-weight:bold;color:#4299e1}
+        .online{color:#48bb78;font-weight:bold}
+        .ctrl-btn{background:#48bb78;color:white;border:none;padding:8px 16px;border-radius:15px;cursor:pointer;margin:3px;font-size:13px}
+        .ctrl-btn:hover{background:#38a169}
+        .danger{background:#f56565}
+        .danger:hover{background:#e53e3e}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>ESP32 Webserver Dashboard</h1>
+            <p>Real-time System Monitor & Control Panel</p>
+            <nav class="nav">
+                <a href="/" class="btn">Home</a>
+                <a href="/index" class="btn">Index</a>
+                <a href="/login" class="btn">Login</a>
+                <a href="/logout" class="btn">Logout</a>
+            </nav>
+        </header>
+
+        <div class="grid">
+            <div class="card">
+                <h2>System Status</h2>
+                <div class="metric"><span>Device Status</span><span class="value online">Online</span></div>
+                <div class="metric"><span>WiFi Connection</span><span class="value">Connected</span></div>
+                <div class="metric"><span>Uptime</span><span class="value">24h 15m</span></div>
+                <div class="metric"><span>Free Memory</span><span class="value">156 KB</span></div>
+                <div class="metric"><span>CPU Usage</span><span class="value">12%</span></div>
+                <div class="metric"><span>Temperature</span><span class="value">42°C</span></div>
+            </div>
+
+            <div class="card">
+                <h2>Sensor Readings</h2>
+                <div class="metric"><span>Temperature</span><span class="value">24.5°C</span></div>
+                <div class="metric"><span>Humidity</span><span class="value">45%</span></div>
+                <div class="metric"><span>Pressure</span><span class="value">1013 hPa</span></div>
+                <div class="metric"><span>Light Level</span><span class="value">780 lux</span></div>
+                <div class="metric"><span>Sound Level</span><span class="value">35 dB</span></div>
+                <div class="metric"><span>Air Quality</span><span class="value">Good</span></div>
+            </div>
+
+            <div class="card">
+                <h2>Device Control</h2>
+                <p>Control ESP32 devices and peripherals</p>
+                <div style="margin-top:15px">
+                    <button class="ctrl-btn">LED ON</button>
+                    <button class="ctrl-btn danger">LED OFF</button>
+                    <button class="ctrl-btn">Relay Toggle</button>
+                    <button class="ctrl-btn">Servo Move</button>
+                    <button class="ctrl-btn">Fan Control</button>
+                    <button class="ctrl-btn">Motor Start</button>
+                    <button class="ctrl-btn">Buzzer</button>
+                    <button class="ctrl-btn danger">Emergency Stop</button>
+                    <button class="ctrl-btn danger">System Reset</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Network Information</h2>
+                <div class="metric"><span>IP Address</span><span class="value">192.168.1.100</span></div>
+                <div class="metric"><span>MAC Address</span><span class="value">AA:BB:CC:DD:EE:FF</span></div>
+                <div class="metric"><span>Signal Strength</span><span class="value">-45 dBm</span></div>
+                <div class="metric"><span>Gateway</span><span class="value">192.168.1.1</span></div>
+                <div class="metric"><span>DNS Server</span><span class="value">8.8.8.8</span></div>
+                <div class="metric"><span>Subnet Mask</span><span class="value">255.255.255.0</span></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>System Information</h2>
+            <div class="metric"><span>Firmware Version</span><span class="value">v2.1.0</span></div>
+            <div class="metric"><span>Hardware Revision</span><span class="value">ESP32-D0WDQ6</span></div>
+            <div class="metric"><span>Flash Size</span><span class="value">4 MB</span></div>
+            <div class="metric"><span>SRAM Size</span><span class="value">520 KB</span></div>
+            <div class="metric"><span>Boot Time</span><span class="value">2.3 seconds</span></div>
+            <div class="metric"><span>Last Reset</span><span class="value">Power On Reset</span></div>
+            <div class="metric"><span>Compile Date</span><span class="value">Oct 19 2025</span></div>
+            <div class="metric"><span>WiFi Mode</span><span class="value">Station</span></div>
+            <div class="metric"><span>Encryption</span><span class="value">WPA2-PSK</span></div>
+            <div class="metric"><span>Channel</span><span class="value">6</span></div>
+        </div>
+
+        <div style="text-align:center;margin-top:30px;color:rgba(255,255,255,0.8)">
+            <p>&copy; 2025 ESP32 Dashboard | Build v1.0.0 | Powered by ESP-IDF Framework</p>
+            <p>Last Update: October 19, 2025 14:30 UTC | Refresh Rate: 5 seconds</p>
+        </div>
+    </div>
+</body>
 </html>

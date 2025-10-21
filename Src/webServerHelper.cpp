@@ -1,5 +1,6 @@
 #include "esp_http_server.h"
 #include "Arduino.h"
+#include "sdCardHandler.h"
 
 
 // Helper function to send large content in chunks
@@ -41,4 +42,28 @@ char* getContentFromReq(httpd_req_t *req) {
         buf[buf_len] = '\0'; // Null-terminate the string
     }
     return buf;
+}
+
+
+// Serve file from SD card
+esp_err_t serveFileFromSD(httpd_req_t *req, const char* filepath, const char* contentType) {
+    size_t fileSize = 0;
+    char* fileContent = readFileFromSD(filepath, &fileSize);
+
+    if (!fileContent) {
+        Serial.printf("File not found: %s\n", filepath);
+        httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "File not found");
+        return ESP_FAIL;
+    }
+
+    // Set content type
+    httpd_resp_set_type(req, contentType);
+
+    // Send the file content
+    esp_err_t result = sendLargeResponse(req, fileContent, fileSize);
+
+    // Free the buffer
+    free(fileContent);
+
+    return result;
 }

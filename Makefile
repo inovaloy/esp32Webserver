@@ -18,6 +18,10 @@ autogen:
 	python3 Scripts/updateWebServer.py
 
 
+sd-prepare:
+	python3 Scripts/prepareSDCard.py
+
+
 build: autogen
 	cd Src && make ${PARAMS} && cd ..
 
@@ -64,6 +68,7 @@ clean:
 help:
 	@echo "Available targets:"
 	@echo "  autogen    - Generate necessary files for the web server"
+	@echo "  sd-prepare - Prepare HTML files for SD card deployment"
 	@echo "  build      - Compile the sketch"
 	@echo "  flash      - Upload the compiled sketch to the ESP32 board"
 	@echo "  configure  - Set up the ESP32 Arduino environment"

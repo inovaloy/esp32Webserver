@@ -2,3 +2,4 @@
 *.patch
 build/
 Src/AutoGen/
+sd_card_files/
