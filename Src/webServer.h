@@ -3,5 +3,9 @@
 
 #include "AutoGen/autoGenWebServer.h"
 
-void webHandelerHook(webServerMacro hook);
+void webHandlerHook(webServerMacro hook);
+
+// Hooks for API handlers
+char* apiTestHandlerHook();
+char* apiServerHandlerHook();
 #endif

@@ -1,38 +1,46 @@
 {
     "/" : {
+        "rtnType"      : "HTML",
         "fileName"     : "index.html",
         "macro"        : "INDEX_HTML",
-        "userFunc"     : "yes",
-        "autoReturn"   : "yes"
+        "reqType"      : "GET"
     },
     "/index" : {
+        "rtnType"      : "HTML",
         "fileName"     : "index.html",
         "macro"        : "INDEX_HTML",
-        "userFunc"     : "yes",
-        "autoReturn"   : "yes"
+        "reqType"      : "GET"
     },
     "/home" : {
+        "rtnType"      : "HTML",
         "fileName"     : "home.html",
         "macro"        : "HOME_HTML",
-        "userFunc"     : "yes",
-        "autoReturn"   : "yes"
+        "reqType"      : "GET"
     },
     "/dshbrd" : {
+        "rtnType"      : "HTML",
         "fileName"     : "dashboard.html",
         "macro"        : "DASHBOARD_HTML",
-        "userFunc"     : "yes",
-        "autoReturn"   : "yes"
+        "reqType"      : "GET"
     },
     "/login" : {
+        "rtnType"      : "HTML",
         "fileName"     : "login.html",
         "macro"        : "LOGIN_HTML",
-        "userFunc"     : "yes",
-        "autoReturn"   : "yes"
+        "reqType"      : "GET"
     },
     "/logout" : {
+        "rtnType"      : "HTML",
         "fileName"     : "logout.html",
         "macro"        : "LOGOUT_HTML",
-        "userFunc"     : "yes",
-        "autoReturn"   : "yes"
+        "reqType"      : "GET"
+    },
+    "/api/test" : {
+        "rtnType"      : "JSON",
+        "reqType"      : "GET"
+    },
+    "/api/server" : {
+        "rtnType"      : "JSON",
+        "reqType"      : "GET"
     }
 }

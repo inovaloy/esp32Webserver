@@ -1,6 +1,6 @@
 #include <WiFi.h>
 #include "AutoGen/autoGenWebServer.h"
-#include "httpClinet.h"
+#include "httpClient.h"
 // #include "sd_card.h"
 // #include "LiquidCrystal_I2C.h"
 #include <SPI.h>
