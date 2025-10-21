@@ -61,7 +61,7 @@ static esp_err_t """+handlerName+"""(httpd_req_t *req){
     httpd_resp_set_type(req, "text/html");
     httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
     webHandlerHook("""+hook+""");
-    return send_large_response(req, (const char *)"""+arrStrName+""", """+arrStrLength+""");
+    return sendLargeResponse(req, (const char *)"""+arrStrName+""", """+arrStrLength+""");
 }
 """
     return funcData
@@ -73,20 +73,25 @@ static esp_err_t """+handlerName+"""(httpd_req_t *req) {
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
 
-    char *json_data = """+hook+"""();
-    esp_err_t result = httpd_resp_sendstr(req, json_data);
-    free(json_data);
+    char *jsonData = """+hook+"""(req);
+    esp_err_t result = httpd_resp_sendstr(req, jsonData);
+    free(jsonData);
     return result;
 }
 """
     return funcData
 
 
-def getUriData(uriDefine, uri, handlerName):
+def getUriData(uriDefine, uri, handlerName, method="GET"):
+    if method == "POST":
+        httpMethod = "HTTP_POST"
+    else:
+        httpMethod = "HTTP_GET"
+
     uriData="""
     httpd_uri_t """+uriDefine+""" = {
         .uri       = \""""+uri+"""\",
-        .method    = HTTP_GET,
+        .method    = """+httpMethod+""",
         .handler   = """+handlerName+""",
         .user_ctx  = NULL
     };
@@ -133,6 +138,7 @@ def updateWebServerCppFile():
             if linkerData[uri]["rtnType"] == "JSON":
                 uriDefine = "uri"+uri.replace("/","_")
                 handlerFunc = convertToCamelCase(uri[1:]+"/Handler", "/")
+                requestMethod = linkerData[uri].get("reqType", "GET")
 
                 if handlerFunc not in apiHandlerFunctions:
                     apiHandlerFunctions.append(handlerFunc)
@@ -147,7 +153,8 @@ def updateWebServerCppFile():
                     data = getUriData (
                         uriDefine,
                         uri,
-                        handlerFunc
+                        handlerFunc,
+                        requestMethod
                     )
                     uriJsonDefinitionsData.append(data)
                     uriJsonRegisterData.append(f"\n        httpd_register_uri_handler(webServerHttpd, &{uriDefine});")
@@ -163,27 +170,10 @@ def updateWebServerCppFile():
 #include "AutoGen/autoGenHtmlData.h"
 #include "Arduino.h"
 #include "webServer.h"
+#include "webServerHelper.h"
 #include "AutoGen/autoGenWebServer.h"
 
 httpd_handle_t webServerHttpd = NULL;
-
-// Helper function to send large content in chunks
-static esp_err_t send_large_response(httpd_req_t *req, const char* data, size_t data_len) {
-    const size_t chunk_size = 1024; // Send in 1KB chunks
-    size_t remaining = data_len;
-
-    while (remaining > 0) {
-        size_t to_send = (remaining > chunk_size) ? chunk_size : remaining;
-        if (httpd_resp_send_chunk(req, data, to_send) != ESP_OK) {
-            return ESP_FAIL;
-        }
-        data += to_send;
-        remaining -= to_send;
-    }
-
-    // Send empty chunk to signal end
-    return httpd_resp_send_chunk(req, NULL, 0);
-}
 """
 
     # Add handler Fuctions
@@ -219,8 +209,9 @@ void startWebServer(){
     # Add Register Function middle
     webServerData += """
     if (httpd_start(&webServerHttpd, &config) == ESP_OK) {
-        // Register static page handlers
-    """
+        Serial.println("Web server started successfully!");
+
+        // Register static page handlers"""
 
     # Add Uri register function
     for data in uriHtmlRegisterData:
@@ -233,6 +224,8 @@ void startWebServer(){
 
     # Add Register Function end
     webServerData += """
+    } else {
+        Serial.println("Failed to start web server!");
     }
 }
 """

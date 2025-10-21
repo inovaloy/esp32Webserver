@@ -35,12 +35,12 @@
         "macro"        : "LOGOUT_HTML",
         "reqType"      : "GET"
     },
-    "/api/test" : {
+    "/api/login" : {
         "rtnType"      : "JSON",
-        "reqType"      : "GET"
+        "reqType"      : "POST"
     },
-    "/api/server" : {
+    "/api/register" : {
         "rtnType"      : "JSON",
-        "reqType"      : "GET"
+        "reqType"      : "POST"
     }
 }
