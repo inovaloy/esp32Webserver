@@ -5,10 +5,13 @@ import shutil
 import json
 
 HTML_DIR          = "html"
-BUILD_DIR         = "_tmp"
+LINKER_DATA_FILE  = "linkerData.json"
+BUILD_DIR         = ".temp/AutoGen"
 AUTOGEN_HTML_FILE = "autoGenHtmlData.h"
 AUTOGEN_INFO_FILE = "autoGenInfo.json"
-InfoData = {}
+AUTOGEN_DEST_DIR  = "Src/AutoGen"
+InfoData          = {}
+LinkerData        = []
 
 def str2hex(decimal):
     hexadecimal = "0x"+hex(decimal)[2:].zfill(2).upper()
@@ -24,11 +27,25 @@ def convertToCamelCase(data, separator="."):
     return camelString
 
 
+def readLinkerDataFile():
+    global LinkerData
+    with open(os.path.join(HTML_DIR, LINKER_DATA_FILE), 'r') as file:
+        jsonData = json.loads(file.read())
+        for item in jsonData:
+            returnType = jsonData[item]["rtnType"]
+            if returnType != "HTML":
+                continue
+            fileName = jsonData[item]["fileName"]
+            LinkerData.append(fileName)
+
+
 def createHeaderFile():
     h = io.open(os.path.join(BUILD_DIR, AUTOGEN_HTML_FILE), "w", newline='\n')
     h.write("""/*
 * This is a autogen file; Do not change manually
 */
+
+#include <stdint.h>
 """)
     h.close()
 
@@ -64,15 +81,16 @@ const uint8_t """+arrStrName+"""[] = {
 
 def createZipFiles():
     global InfoData
+    global LinkerData
     htmlFiles = os.listdir(HTML_DIR)
-    if not os.path.exists(BUILD_DIR):
-        os.mkdir(BUILD_DIR)
-    else:
-        files = os.listdir(os.path.join(BUILD_DIR))
-        for f in files:
-            os.remove(os.path.join(BUILD_DIR, f))
+    if os.path.exists(BUILD_DIR):
+        shutil.rmtree(BUILD_DIR)
+    os.makedirs(BUILD_DIR)
 
     for htmlFile in htmlFiles:
+        if htmlFile not in LinkerData:
+            print("Skipping file:", htmlFile)
+            continue
         if htmlFile.endswith(".html"):
             fp = open(os.path.join(HTML_DIR, htmlFile),"rb")
             data = fp.read()
@@ -99,7 +117,7 @@ def readZipFile():
                 createHeaderFile()
 
             zipDataLength = len(zipData)
-            print("File:", zipFile, "\tLength:", zipDataLength)
+            print(f"File: \t{zipFile:<30} Length: {zipDataLength}")
             arrStrName = convertToCamelCase(zipFile)
             arrStrLength = arrStrName+"Len"
 
@@ -113,12 +131,18 @@ def readZipFile():
             updateHeaderFile(zipFile, zipData, zipDataLength, arrStrName, arrStrLength)
 
     if os.path.exists(os.path.join(BUILD_DIR, AUTOGEN_HTML_FILE)):
-        shutil.copy(os.path.join(BUILD_DIR, AUTOGEN_HTML_FILE), AUTOGEN_HTML_FILE)
+        os.makedirs(AUTOGEN_DEST_DIR, exist_ok = True)
+
+        shutil.copy(
+            os.path.join(BUILD_DIR, AUTOGEN_HTML_FILE),
+            os.path.join(AUTOGEN_DEST_DIR, AUTOGEN_HTML_FILE)
+        )
 
     with open(os.path.join(BUILD_DIR, AUTOGEN_INFO_FILE), 'w') as autoGenInfoFile:
         autoGenInfoFile.write(json.dumps(InfoData, indent=4))
 
 def main():
+    readLinkerDataFile()
     createZipFiles()
     readZipFile()
 
