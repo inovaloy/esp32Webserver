@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ESP32 WiFi Configuration</title>
+    <meta name='viewport' content='width=device-width, initial-scale=1'>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+        .status-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #007bff;
+        }
+        .connected {
+            border-left-color: #28a745;
+        }
+        .disconnected {
+            border-left-color: #dc3545;
+        }
+        input, select, button {
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+        input:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 5px rgba(0,123,255,0.3);
+        }
+        button {
+            background: linear-gradient(45deg, #007bff, #0056b3);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,123,255,0.3);
+        }
+        .scan-btn {
+            background: linear-gradient(45deg, #28a745, #1e7e34);
+            margin-bottom: 15px;
+        }
+        .scan-btn:hover {
+            box-shadow: 0 5px 15px rgba(40,167,69,0.3);
+        }
+        #networks {
+            margin: 15px 0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .network-item {
+            padding: 12px;
+            margin: 8px 0;
+            background: #f8f9fa;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .network-item:hover {
+            background: #e9ecef;
+            border-color: #007bff;
+        }
+        .network-item.selected {
+            background: #e3f2fd;
+            border-color: #2196f3;
+        }
+        .signal-strength {
+            font-size: 12px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #007bff;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        #message {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 5px;
+            display: none;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <a href="/" class="back-link">Back to Dashboard</a>
+        <h1>WiFi Configuration test 1234</h1>
+
+        <div id="status" class="status-card">
+            <div class="loading">Loading WiFi status...</div>
+        </div>
+
+        <button class='scan-btn' onclick='scanNetworks()'>Scan for Networks</button>
+        <div id='networks'></div>
+
+        <form id="wifiForm">
+            <input type='text' name='ssid' id='ssid' placeholder='WiFi Network Name (SSID)' required>
+            <input type='password' name='password' id='password' placeholder='WiFi Password (leave empty if no password)'>
+            <button type='submit'>Connect to Network</button>
+        </form>
+
+        <div id="message"></div>
+
+        <div style='text-align: center; margin-top: 30px; color: #666; font-size: 14px;'>
+            ESP32 WebServer WiFi Configuration Panel
+        </div>
+    </div>
+
+    <script>
+        let selectedNetwork = null;
+
+        // Load WiFi status on page load
+        window.addEventListener('load', function() {
+            loadWiFiStatus();
+        });
+
+        async function loadWiFiStatus() {
+            try {
+                const response = await fetch('/api/wifi/status');
+                const data = await response.json();
+
+                const statusDiv = document.getElementById('status');
+                if (data.connected) {
+                    statusDiv.innerHTML = `
+                        <strong>Connected to WiFi</strong><br>
+                        <strong>Network:</strong> ${data.ssid}<br>
+                        <strong>IP Address:</strong> ${data.ip}<br>
+                        <strong>Signal Strength:</strong> ${data.rssi} dBm
+                    `;
+                    statusDiv.className = 'status-card connected';
+                } else {
+                    statusDiv.innerHTML = `
+                        <strong>Not Connected</strong><br>
+                        Status: ${data.status || 'Disconnected'}
+                    `;
+                    statusDiv.className = 'status-card disconnected';
+                }
+            } catch (error) {
+                console.error('Error loading WiFi status:', error);
+                document.getElementById('status').innerHTML = `
+                    <strong>Error</strong><br>
+                    Could not load WiFi status
+                `;
+            }
+        }
+
+        async function scanNetworks() {
+            const networksDiv = document.getElementById('networks');
+            networksDiv.innerHTML = '<div class="loading">Scanning for networks...</div>';
+
+            try {
+                const response = await fetch('/api/wifi/scan');
+                const data = await response.json();
+
+                if (data.count === 0) {
+                    networksDiv.innerHTML = '<div class="loading">No networks found</div>';
+                    return;
+                }
+
+                let html = '<h3>Available Networks:</h3>';
+                data.networks.forEach((network, index) => {
+                    const strength = getSignalStrength(network.rssi);
+
+                    html += `<div class="network-item" onclick="selectNetwork('${network.ssid}', ${index})">
+                        <span>${network.ssid}</span>
+                        <div class="signal-strength">${strength} ${network.rssi} dBm</div>
+                    </div>`;
+                });
+
+                networksDiv.innerHTML = html;
+            } catch (error) {
+                console.error('Error scanning networks:', error);
+                networksDiv.innerHTML = '<div class="loading">Scan failed. Please try again.</div>';
+            }
+        }
+
+        function getSignalStrength(rssi) {
+            if (rssi > -50) return 'Excellent';
+            if (rssi > -60) return 'Good';
+            if (rssi > -70) return 'Fair';
+            if (rssi > -80) return 'Weak';
+            return 'Very Weak';
+        }
+
+        function selectNetwork(ssid, index) {
+            // Remove previous selection
+            document.querySelectorAll('.network-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+
+            // Add selection to clicked item
+            document.querySelectorAll('.network-item')[index].classList.add('selected');
+
+            // Set SSID in form
+            document.getElementById('ssid').value = ssid;
+            selectedNetwork = ssid;
+        }
+
+        // Handle form submission
+        document.getElementById('wifiForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(e.target);
+            const ssid = formData.get('ssid');
+            const password = formData.get('password');
+
+            if (!ssid) {
+                showMessage('Please enter a network name (SSID)', 'error');
+                return;
+            }
+
+            showMessage('Connecting to network...', 'info');
+
+            try {
+                const response = await fetch('/api/wifi/connect', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ ssid, password })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showMessage('Successfully connected to ' + ssid + '!', 'success');
+                    setTimeout(loadWiFiStatus, 2000); // Reload status after 2 seconds
+                } else {
+                    showMessage('Failed to connect: ' + (result.message || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                console.error('Error connecting to WiFi:', error);
+                showMessage('Connection failed. Please try again.', 'error');
+            }
+        });
+
+        function showMessage(text, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = text;
+            messageDiv.className = type;
+            messageDiv.style.display = 'block';
+
+            if (type === 'success') {
+                setTimeout(() => {
+                    messageDiv.style.display = 'none';
+                }, 5000);
+            }
+        }
+    </script>
+</body>
+</html>

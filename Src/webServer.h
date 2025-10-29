@@ -8,5 +8,8 @@ void webHandlerHook(webServerMacro hook);
 // Hooks for API handlers
 char* apiLoginHandlerHook(httpd_req_t *req);
 char* apiRegisterHandlerHook(httpd_req_t *req);
+char* apiWifiStatusHandlerHook(httpd_req_t *req);
+char* apiWifiScanHandlerHook(httpd_req_t *req);
+char* apiWifiConnectHandlerHook(httpd_req_t *req);
 
 #endif // WEB_SERVER_H
