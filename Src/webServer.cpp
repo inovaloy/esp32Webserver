@@ -5,6 +5,8 @@
 #include "webServer.h"
 #include "webServerHelper.h"
 #include <cJSON.h>
+#include <WiFi.h>
+#include <EEPROM.h>
 
 
 void webHandlerHook(webServerMacro hook)
@@ -29,6 +31,10 @@ void webHandlerHook(webServerMacro hook)
 
     case LOGOUT_HTML:
         Serial.println("from LOGOUT_HTML");
+        break;
+
+    case WIFI_CONFIG_HTML:
+        Serial.println("from WIFI_CONFIG_HTML");
         break;
 
     default:
@@ -103,6 +109,125 @@ char* apiRegisterHandlerHook(httpd_req_t *req) {
         } else {
             cJSON_AddBoolToObject(response, "success", false);
             cJSON_AddStringToObject(response, "message", "Username, password, and email are required");
+        }
+
+        cJSON_Delete(json);
+    }
+
+    char *response_string = cJSON_Print(response);
+    cJSON_Delete(response);
+    return response_string;
+}
+
+// WiFi status handler - returns current WiFi connection status
+char* apiWifiStatusHandlerHook(httpd_req_t *req) {
+    cJSON *response = cJSON_CreateObject();
+
+    if (WiFi.status() == WL_CONNECTED) {
+        cJSON_AddBoolToObject(response, "connected", true);
+        cJSON_AddStringToObject(response, "ssid", WiFi.SSID().c_str());
+        cJSON_AddStringToObject(response, "ip", WiFi.localIP().toString().c_str());
+        cJSON_AddNumberToObject(response, "rssi", WiFi.RSSI());
+    } else {
+        cJSON_AddBoolToObject(response, "connected", false);
+        cJSON_AddStringToObject(response, "status", "Disconnected");
+    }
+
+    char *response_string = cJSON_Print(response);
+    cJSON_Delete(response);
+    return response_string;
+}
+
+// WiFi scan handler - returns list of available networks
+char* apiWifiScanHandlerHook(httpd_req_t *req) {
+    cJSON *response = cJSON_CreateObject();
+    cJSON *networks = cJSON_CreateArray();
+
+    int networkCount = WiFi.scanNetworks();
+
+    if (networkCount > 0) {
+        for (int i = 0; i < networkCount; i++) {
+            cJSON *network = cJSON_CreateObject();
+            cJSON_AddStringToObject(network, "ssid", WiFi.SSID(i).c_str());
+            cJSON_AddNumberToObject(network, "rssi", WiFi.RSSI(i));
+            cJSON_AddBoolToObject(network, "encrypted", WiFi.encryptionType(i) != WIFI_AUTH_OPEN);
+            cJSON_AddItemToArray(networks, network);
+        }
+    }
+
+    cJSON_AddNumberToObject(response, "count", networkCount);
+    cJSON_AddItemToObject(response, "networks", networks);
+
+    char *response_string = cJSON_Print(response);
+    cJSON_Delete(response);
+    return response_string;
+}
+
+// WiFi connect handler - connects to specified network
+char* apiWifiConnectHandlerHook(httpd_req_t *req) {
+    char* jsonData = getContentFromReq(req);
+    if (jsonData == nullptr) {
+        Serial.println("Error: Failed to get content from request");
+        return nullptr;
+    }
+
+    cJSON *json = cJSON_Parse(jsonData);
+    cJSON *response = cJSON_CreateObject();
+
+    if (json == NULL) {
+        cJSON_AddBoolToObject(response, "success", false);
+        cJSON_AddStringToObject(response, "message", "Invalid JSON data");
+    } else {
+        cJSON *ssid_json = cJSON_GetObjectItem(json, "ssid");
+        cJSON *password_json = cJSON_GetObjectItem(json, "password");
+
+        if (cJSON_IsString(ssid_json)) {
+            String ssid = String(ssid_json->valuestring);
+            String password = "";
+
+            if (cJSON_IsString(password_json)) {
+                password = String(password_json->valuestring);
+            }
+
+            Serial.printf("Attempting to connect to WiFi: %s\n", ssid.c_str());
+
+            // Disconnect current connection
+            WiFi.disconnect();
+            delay(100);
+
+            // Connect to new network
+            WiFi.begin(ssid.c_str(), password.c_str());
+
+            // Wait up to 10 seconds for connection
+            unsigned long startTime = millis();
+            while (WiFi.status() != WL_CONNECTED && millis() - startTime < 10000) {
+                delay(500);
+            }
+
+            if (WiFi.status() == WL_CONNECTED) {
+                // Save credentials to EEPROM
+                for (int i = 0; i < 32; i++) {
+                    EEPROM.write(i, i < ssid.length() ? ssid[i] : 0);
+                }
+                for (int i = 0; i < 64; i++) {
+                    EEPROM.write(100 + i, i < password.length() ? password[i] : 0);
+                }
+                EEPROM.commit();
+
+                cJSON_AddBoolToObject(response, "success", true);
+                cJSON_AddStringToObject(response, "message", "Connected successfully");
+                cJSON_AddStringToObject(response, "ip", WiFi.localIP().toString().c_str());
+
+                Serial.printf("Successfully connected to %s\n", ssid.c_str());
+            } else {
+                cJSON_AddBoolToObject(response, "success", false);
+                cJSON_AddStringToObject(response, "message", "Failed to connect to network");
+
+                Serial.printf("Failed to connect to %s\n", ssid.c_str());
+            }
+        } else {
+            cJSON_AddBoolToObject(response, "success", false);
+            cJSON_AddStringToObject(response, "message", "SSID is required");
         }
 
         cJSON_Delete(json);

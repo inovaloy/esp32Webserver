@@ -133,7 +133,11 @@ def updateWebServerCppFile():
                             handlerFunc
                         )
                         uriHtmlDefinitionsData.append(data)
-                        uriHtmlRegisterData.append(f"\n        httpd_register_uri_handler(webServerHttpd, &{uriDefine});")
+                        uriHtmlRegisterData.append(f"""
+        returnCode = httpd_register_uri_handler(webServerHttpd, &{uriDefine});
+        if (returnCode != ESP_OK) {{
+            Serial.println(\"Failed to register URI handler for {uri}. ERROR: 0x\" + String(returnCode, HEX));
+        }}""")
 
             if linkerData[uri]["rtnType"] == "JSON":
                 uriDefine = "uri"+uri.replace("/","_")
@@ -157,7 +161,11 @@ def updateWebServerCppFile():
                         requestMethod
                     )
                     uriJsonDefinitionsData.append(data)
-                    uriJsonRegisterData.append(f"\n        httpd_register_uri_handler(webServerHttpd, &{uriDefine});")
+                    uriJsonRegisterData.append(f"""
+        returnCode = httpd_register_uri_handler(webServerHttpd, &{uriDefine});
+        if (returnCode != ESP_OK) {{
+            Serial.println(\"Failed to register URI handler for {uri}. ERROR: 0x\" + String(returnCode, HEX));
+        }}""")
 
 
 
@@ -195,6 +203,7 @@ void startWebServer(){
     config.task_priority    = 5;               // Set task priority
     config.core_id          = tskNO_AFFINITY;  // Allow task to run on any core
     config.max_open_sockets = 7;               // Increase max open sockets if needed
+    config.max_uri_handlers = 2 * 8;           // Increase max URI handlers
 """
     webServerData += "\n    // HTML File Handlers and URIs"
     # Add HTML Uri definitions
@@ -210,6 +219,7 @@ void startWebServer(){
     webServerData += """
     if (httpd_start(&webServerHttpd, &config) == ESP_OK) {
         Serial.println("Web server started successfully!");
+        esp_err_t returnCode;
 
         // Register static page handlers"""
 
