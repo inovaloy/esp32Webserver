@@ -1,3 +1,9 @@
+#!/usr/bin/env python3
+"""
+HTML Compilation Script for ESP32 Webserver
+Compiles HTML files to compressed char arrays
+"""
+
 import gzip
 import os
 import io
@@ -6,76 +12,12 @@ import json
 import re
 import argparse
 
-HTML_DIR          = "html"
-LINKER_DATA_FILE  = "linkerData.json"
-BUILD_DIR         = ".temp/AutoGen"
-AUTOGEN_HTML_FILE = "autoGenHtmlData.h"
-AUTOGEN_INFO_FILE = "autoGenInfo.json"
-AUTOGEN_DEST_DIR  = "Src/AutoGen"
+from common import *
+from utility import *
+
+
 InfoData          = {}
 LinkerData        = []
-
-def str2hex(decimal):
-    hexadecimal = "0x"+hex(decimal)[2:].zfill(2).upper()
-    return hexadecimal
-
-
-def minifyCss(cssContent):
-    """
-    Minify CSS by removing unnecessary whitespace and comments.
-    """
-    # Remove CSS comments
-    cssContent = re.sub(r'/\*.*?\*/', '', cssContent, flags = re.DOTALL)
-
-    # Remove unnecessary whitespace around CSS syntax
-    cssContent = re.sub(r'\s*([{}:;,])\s*', r'\1', cssContent)
-
-    # Remove multiple whitespace and newlines
-    cssContent = re.sub(r'\s+', ' ', cssContent)
-
-    # Remove leading and trailing whitespace
-    cssContent = cssContent.strip()
-
-    return cssContent
-
-
-def minifyJavaScript(jsContent):
-    """
-    Minify JavaScript by removing unnecessary whitespace and comments.
-    Uses a safer approach to preserve functionality.
-    """
-    # Remove single-line comments (but be careful with // in strings and URLs)
-    jsContent = re.sub(r'(?<!:)//(?!/).*?(?=\n|$)', '', jsContent)
-
-    # Remove multi-line comments
-    jsContent = re.sub(r'/\*.*?\*/', '', jsContent, flags = re.DOTALL)
-
-    # Remove leading and trailing whitespace from each line
-    lines = jsContent.split('\n')
-    lines = [line.strip() for line in lines if line.strip()]
-
-    # Join lines with single space
-    jsContent = ' '.join(lines)
-
-    # Remove excessive whitespace (replace multiple spaces with single space)
-    jsContent = re.sub(r'\s+', ' ', jsContent)
-
-    # Remove spaces around specific punctuation where it's safe
-    jsContent = re.sub(r'\s*([{}();,])\s*', r'\1', jsContent)
-    jsContent = re.sub(r'\s*:\s*', r':', jsContent)  # Object property colons
-    jsContent = re.sub(r'\s*=\s*', r'=', jsContent)  # Assignment operators
-
-    # Remove spaces around brackets
-    jsContent = re.sub(r'\s*(\[)\s*', r'\1', jsContent)
-    jsContent = re.sub(r'\s*(\])\s*', r'\1', jsContent)
-
-    # Clean up any remaining multiple spaces
-    jsContent = re.sub(r'\s+', ' ', jsContent)
-
-    # Remove leading and trailing whitespace
-    jsContent = jsContent.strip()
-
-    return jsContent
 
 
 def minifyHtml(htmlContent):
@@ -147,32 +89,30 @@ def minifyHtml(htmlContent):
     return htmlContent
 
 
-def convertToCamelCase(data, separator = "."):
-    dataList = data.split(separator)
-    camelString = dataList[0].lower()
-    for i in range(1, len(dataList)):
-        camelString += dataList[i][0].upper() + dataList[i][1:].lower()
-
-    return camelString
-
-
 def readLinkerDataFile():
     global LinkerData
-    with open(os.path.join(HTML_DIR, LINKER_DATA_FILE), 'r') as file:
-        jsonData = json.loads(file.read())
-        for item in jsonData:
-            returnType = jsonData[item]["rtnType"]
-            if returnType != "HTML":
-                continue
-            fileName = jsonData[item]["fileName"]
-            LinkerData.append(fileName)
+    linkerData = readLinkerData(LINKER_DATA_FILE)
+    print(f"Loading HTML file mappings from: {LINKER_DATA_FILE}")
+
+    for route, config in linkerData.items():
+        returnType = config.get("rtnType", "")
+        if returnType != "HTML":
+            continue
+        fileName = config["fileName"]
+        LinkerData.append(fileName)
+
+    print(f"Found {len(LinkerData)} HTML files to process")
 
 
 def createHeaderFile():
-    h = io.open(os.path.join(BUILD_DIR, AUTOGEN_HTML_FILE), "w", newline = '\n')
+    h = io.open(os.path.join(BUILD_DIR, AUTOGEN_HTML_H), "w", newline = '\n')
     h.write("""/*
-* This is a autogen file; Do not change manually
+* This is an autogen file; Do not change manually
+* Contains compressed HTML files for ESP32 Webserver
 */
+
+#ifndef AUTOGEN_HTML_H
+#define AUTOGEN_HTML_H
 
 #include <stdint.h>
 """)
@@ -180,7 +120,7 @@ def createHeaderFile():
 
 
 def updateHeaderFile(zipName, zipData, zipDataLength, arrStrName, arrStrLength):
-    h = io.open(os.path.join(BUILD_DIR, AUTOGEN_HTML_FILE), "a", newline = '\n')
+    h = io.open(os.path.join(BUILD_DIR, AUTOGEN_HTML_H), "a", newline = '\n')
     h.write("""
 // File: """+str(zipName)+""", Size: """+str(zipDataLength)+"""
 #define """+arrStrLength+""" """+str(zipDataLength)+"""
@@ -212,13 +152,11 @@ def createZipFiles(enableCompression = True):
     global InfoData
     global LinkerData
     htmlFiles = os.listdir(HTML_DIR)
-    if os.path.exists(BUILD_DIR):
-        shutil.rmtree(BUILD_DIR)
-    os.makedirs(BUILD_DIR)
+    os.makedirs(BUILD_DIR, exist_ok = True)
 
     # Create a subdirectory for compressed HTML files
     compressedHtmlDir = os.path.join(BUILD_DIR, "compressed_html")
-    os.makedirs(compressedHtmlDir)
+    os.makedirs(compressedHtmlDir, exist_ok = True)
 
     for htmlFile in htmlFiles:
         if htmlFile not in LinkerData:
@@ -271,15 +209,13 @@ def createZipFiles(enableCompression = True):
 def readZipFile():
     global InfoData
     zipFiles = os.listdir(BUILD_DIR)
+    createHeaderFile()
 
     for zipFile in zipFiles:
         if zipFile.endswith(".html.gz"):
             zip = open(os.path.join(BUILD_DIR, zipFile),'rb')
             zipData = list(zip.read())
             zip.close()
-
-            if not os.path.exists(os.path.join(BUILD_DIR, AUTOGEN_HTML_FILE)):
-                createHeaderFile()
 
             zipDataLength = len(zipData)
             print(f"Compressed file: \t{zipFile:<30} Length: {zipDataLength}")
@@ -295,16 +231,24 @@ def readZipFile():
 
             updateHeaderFile(zipFile, zipData, zipDataLength, arrStrName, arrStrLength)
 
-    if os.path.exists(os.path.join(BUILD_DIR, AUTOGEN_HTML_FILE)):
+    if os.path.exists(os.path.join(BUILD_DIR, AUTOGEN_HTML_H)):
+        h = io.open(os.path.join(BUILD_DIR, AUTOGEN_HTML_H), "a", newline = '\n')
+        h.write("""
+#endif // AUTOGEN_HTML_H
+""")
+        h.close()
+
+    if os.path.exists(os.path.join(BUILD_DIR, AUTOGEN_HTML_H)):
         os.makedirs(AUTOGEN_DEST_DIR, exist_ok = True)
 
         shutil.copy(
-            os.path.join(BUILD_DIR, AUTOGEN_HTML_FILE),
-            os.path.join(AUTOGEN_DEST_DIR, AUTOGEN_HTML_FILE)
+            os.path.join(BUILD_DIR, AUTOGEN_HTML_H),
+            os.path.join(AUTOGEN_DEST_DIR, AUTOGEN_HTML_H)
         )
 
-    with open(os.path.join(BUILD_DIR, AUTOGEN_INFO_FILE), 'w') as autoGenInfoFile:
+    with open(os.path.join(BUILD_DIR, AUTOGEN_HTML_INFO_FILE), 'w') as autoGenInfoFile:
         autoGenInfoFile.write(json.dumps(InfoData, indent=4))
+
 
 def main():
     # Set up argument parser

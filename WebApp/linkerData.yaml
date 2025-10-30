@@ -1,0 +1,107 @@
+# HTTP Request Types - Variables for common request methods
+# Define reusable constants for HTTP methods to maintain consistency
+httpMethods: &httpMethods
+    GET : &httpGET  "GET"
+    POST: &httpPOST "POST"
+
+# Response Types - Variables for different response content types
+# Define reusable constants for response types and MIME types
+responseTypes: &responseTypes
+    HTML : &rtnHTML  "HTML"
+    JSON : &rtnJSON  "JSON"
+    ASSET: &rtnASSET "ASSET"
+
+# Content Types - Variables for different content types
+# Define reusable constants for content types
+contentTypes: &contentTypes
+    CSS       : &cssType  "text/css"
+    JAVASCRIPT: &jsType   "application/javascript"
+    IMAGE_JPG : &jpgType  "image/jpg"
+    IMAGE_PNG : &pngType  "image/png"
+    JSON      : &jsonType "application/json"
+
+
+# HTML Pages - Web interface routes for user interaction
+# These endpoints serve static HTML pages for the ESP32 web interface
+"/" :
+    rtnType : *rtnHTML
+    fileName: "index.html"
+    macro   : "INDEX_HTML"
+    reqType : *httpGET
+
+"/home" :
+    rtnType : *rtnHTML
+    fileName: "home.html"
+    macro   : "HOME_HTML"
+    reqType : *httpGET
+
+"/dshbrd" :
+    rtnType : *rtnHTML
+    fileName: "dashboard.html"
+    macro   : "DASHBOARD_HTML"
+    reqType : *httpGET
+
+"/login" :
+    rtnType : *rtnHTML
+    fileName: "login.html"
+    macro   : "LOGIN_HTML"
+    reqType : *httpGET
+
+"/logout" :
+    rtnType : *rtnHTML
+    fileName: "logout.html"
+    macro   : "LOGOUT_HTML"
+    reqType : *httpGET
+
+"/wifi_config" :
+    rtnType : *rtnHTML
+    fileName: "wifi_config.html"
+    macro   : "WIFI_CONFIG_HTML"
+    reqType : *httpGET
+
+
+# Static Assets - CSS, JavaScript and media files
+# Frontend resources served with appropriate MIME types for web interface styling and functionality
+"/Css/style.css" :
+    rtnType    : *rtnASSET
+    fileName   : "Css/style.css"
+    macro      : "STYLE_CSS"
+    contentType: *cssType
+    reqType    : *httpGET
+
+"/Js/app.js" :
+    rtnType    : *rtnASSET
+    fileName   : "Js/app.js"
+    macro      : "APP_JS"
+    contentType: *jsType
+    reqType    : *httpGET
+
+"/Image/twoFlower.jpg" :
+    rtnType    : *rtnASSET
+    fileName   : "Image/twoFlower.jpg"
+    macro      : "TWO_FLOWER_JPG"
+    contentType: *jpgType
+    reqType    : *httpGET
+
+
+# REST API Endpoints - JSON data exchange for dynamic functionality
+# Backend services for user authentication and WiFi network management
+"/api/login" :
+    rtnType: *rtnJSON
+    reqType: *httpPOST
+
+"/api/register" :
+    rtnType: *rtnJSON
+    reqType: *httpPOST
+
+"/api/wifi/status" :
+    rtnType: *rtnJSON
+    reqType: *httpGET
+
+"/api/wifi/scan" :
+    rtnType: *rtnJSON
+    reqType: *httpGET
+
+"/api/wifi/connect" :
+    rtnType: *rtnJSON
+    reqType: *httpPOST
