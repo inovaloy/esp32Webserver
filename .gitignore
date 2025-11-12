@@ -2,3 +2,4 @@
 *.patch
 build/
 Src/AutoGen/
+Scripts/__pycache__/

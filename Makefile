@@ -13,8 +13,10 @@ PARAMS        = TEMP_DIR=$(TEMP_DIR) \
 all: help
 
 
+# Autogen target that builds HTML, assets, and web server code
 autogen:
 	python3 Scripts/compileHtml.py
+	python3 Scripts/compileAssets.py
 	python3 Scripts/updateWebServer.py
 
 
@@ -63,7 +65,7 @@ clean:
 
 help:
 	@echo "Available targets:"
-	@echo "  autogen    - Generate necessary files for the web server"
+	@echo "  autogen    - Generate HTML, assets, and web server code"
 	@echo "  build      - Compile the sketch"
 	@echo "  flash      - Upload the compiled sketch to the ESP32 board"
 	@echo "  configure  - Set up the ESP32 Arduino environment"
