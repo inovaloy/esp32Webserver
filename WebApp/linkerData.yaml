@@ -29,30 +29,6 @@ contentTypes: &contentTypes
     macro   : "INDEX_HTML"
     reqType : *httpGET
 
-"/home" :
-    rtnType : *rtnHTML
-    fileName: "home.html"
-    macro   : "HOME_HTML"
-    reqType : *httpGET
-
-"/dshbrd" :
-    rtnType : *rtnHTML
-    fileName: "dashboard.html"
-    macro   : "DASHBOARD_HTML"
-    reqType : *httpGET
-
-"/login" :
-    rtnType : *rtnHTML
-    fileName: "login.html"
-    macro   : "LOGIN_HTML"
-    reqType : *httpGET
-
-"/logout" :
-    rtnType : *rtnHTML
-    fileName: "logout.html"
-    macro   : "LOGOUT_HTML"
-    reqType : *httpGET
-
 "/wifi_config" :
     rtnType : *rtnHTML
     fileName: "wifi_config.html"
@@ -68,6 +44,7 @@ contentTypes: &contentTypes
     macro      : "STYLE_CSS"
     contentType: *cssType
     reqType    : *httpGET
+    isCached   : false
 
 "/Js/app.js" :
     rtnType    : *rtnASSET
@@ -75,25 +52,18 @@ contentTypes: &contentTypes
     macro      : "APP_JS"
     contentType: *jsType
     reqType    : *httpGET
+    isCached   : true
 
-"/Image/twoFlower.jpg" :
+"/Images/logo.png" :
     rtnType    : *rtnASSET
     fileName   : "Image/twoFlower.jpg"
-    macro      : "TWO_FLOWER_JPG"
+    macro      : "TWOFLOWER_JPG"
     contentType: *jpgType
     reqType    : *httpGET
-
+    isCached   : false
 
 # REST API Endpoints - JSON data exchange for dynamic functionality
-# Backend services for user authentication and WiFi network management
-"/api/login" :
-    rtnType: *rtnJSON
-    reqType: *httpPOST
-
-"/api/register" :
-    rtnType: *rtnJSON
-    reqType: *httpPOST
-
+# Backend services for WiFi network management and USB port control
 "/api/wifi/status" :
     rtnType: *rtnJSON
     reqType: *httpGET
@@ -103,5 +73,13 @@ contentTypes: &contentTypes
     reqType: *httpGET
 
 "/api/wifi/connect" :
+    rtnType: *rtnJSON
+    reqType: *httpPOST
+
+"/api/usb/status" :
+    rtnType: *rtnJSON
+    reqType: *httpGET
+
+"/api/usb/toggle" :
     rtnType: *rtnJSON
     reqType: *httpPOST

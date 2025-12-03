@@ -43,7 +43,8 @@ def createWebServerFiles():
                 'fileName': config["fileName"],
                 'contentType': config["contentType"],
                 'macro': config["macro"],
-                'method': config["reqType"]
+                'method': config["reqType"],
+                'cache': config["isCached"]
             })
         elif config["rtnType"] == "JSON":
             print(f"Found API Endpoint: {route}")
@@ -197,7 +198,8 @@ def generateAssetHandler(cpp, asset):
     arrayName = convertToCamelCase(asset['fileName'])
     arrayLen = arrayName + "Len"
 
-    cpp.write(f"""
+    if asset["cache"]:
+        cpp.write(f"""
 static esp_err_t {handlerName}(httpd_req_t *req){{
     httpd_resp_set_type(req, "{asset['contentType']}");
     httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
@@ -205,7 +207,17 @@ static esp_err_t {handlerName}(httpd_req_t *req){{
     httpd_resp_set_hdr(req, "ETag", "\\"{arrayName}\\"");
     return sendLargeResponse(req, (const char *){arrayName}, {arrayLen});
 }}
-""")
+    """)
+    else:
+        cpp.write(f"""
+static esp_err_t {handlerName}(httpd_req_t *req){{
+    httpd_resp_set_type(req, "{asset['contentType']}");
+    httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache, no-store, must-revalidate"); // No Cache
+    httpd_resp_set_hdr(req, "ETag", "\\"{arrayName}\\"");
+    return sendLargeResponse(req, (const char *){arrayName}, {arrayLen});
+}}
+    """)
 
 
 def generateApiHandler(cpp, endpoint):

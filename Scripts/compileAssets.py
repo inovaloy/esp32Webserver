@@ -36,7 +36,8 @@ def readLinkerDataFile():
                     'route': item,
                     'fileName': fileName,
                     'contentType': config.get("contentType", ""),
-                    'macro': config.get("macro", "")
+                    'macro': config.get("macro", ""),
+                    'isCached': config.get("isCached", True)
                 })
 
         print(f"Found {len(LinkerData)} assets to process")
@@ -141,7 +142,7 @@ def compressAssets(enableCompression=True):
     for asset in LinkerData:
         assetPath = os.path.join(ASSETS_DIR, asset['fileName'])
         if os.path.exists(assetPath):
-            processAsset(assetPath, asset['fileName'], enableCompression, asset)
+            processAsset(assetPath, asset['fileName'], asset, enableCompression)
         else:
             print(f"Warning: Asset file not found: {assetPath}")
 
@@ -159,7 +160,7 @@ def compressAssets(enableCompression=True):
         f.write(json.dumps(InfoData, indent=4))
 
 
-def processAsset(filePath, fileName, enableCompression=True, assetInfo=None):
+def processAsset(filePath, fileName, assetInfo, enableCompression=True):
     """Process individual asset file"""
     global InfoData
 
@@ -168,12 +169,18 @@ def processAsset(filePath, fileName, enableCompression=True, assetInfo=None):
 
     print(f"Processing: {fileName}")
 
+    os.makedirs(os.path.dirname(os.path.join(BUILD_DIR, fileName)), exist_ok=True)
+
     # Determine if it's a text or binary file
     if ext in TEXT_ASSET_EXTENSIONS:
         content, originalSize, processedSize = processTextAsset(filePath, enableCompression)
+        with open(os.path.join(BUILD_DIR, fileName), 'w', encoding='utf-8') as tempFile:
+            tempFile.write(content)
         binaryData = content.encode('utf-8')
     else:
         binaryData, originalSize, processedSize = processBinaryAsset(filePath)
+        with open(os.path.join(BUILD_DIR, fileName), 'wb') as tempFile:
+            tempFile.write(binaryData)
 
     # Compress with gzip
     compressedData = gzip.compress(binaryData)
@@ -194,7 +201,8 @@ def processAsset(filePath, fileName, enableCompression=True, assetInfo=None):
         'arrStrLength': arrStrLength,
         'compressionEnabled': enableCompression,
         'route': assetInfo['route'] if assetInfo else f"/assets/{fileName}",
-        'macro': assetInfo['macro'] if assetInfo else arrStrName.upper()
+        'macro': assetInfo['macro'] if assetInfo else arrStrName.upper(),
+        'cache': assetInfo["isCached"]
     }
 
     # Add to header file

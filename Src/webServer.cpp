@@ -17,22 +17,6 @@ void webHandlerHook(webServerMacro hook)
         Serial.println("from INDEX_HTML");
         break;
 
-    case HOME_HTML:
-        Serial.println("from HOME_HTML");
-        break;
-
-    case DASHBOARD_HTML:
-        Serial.println("from DASHBOARD_HTML");
-        break;
-
-    case LOGIN_HTML:
-        Serial.println("from LOGIN_HTML");
-        break;
-
-    case LOGOUT_HTML:
-        Serial.println("from LOGOUT_HTML");
-        break;
-
     case WIFI_CONFIG_HTML:
         Serial.println("from WIFI_CONFIG_HTML");
         break;
@@ -231,6 +215,46 @@ char* apiWifiConnectHandlerHook(httpd_req_t *req) {
         }
 
         cJSON_Delete(json);
+    }
+
+    char *response_string = cJSON_Print(response);
+    cJSON_Delete(response);
+    return response_string;
+}
+
+
+// USB status handler - returns current USB port status
+char* apiUsbStatusHandlerHook(httpd_req_t *req) {
+    cJSON *response = cJSON_CreateObject();
+
+    if (WiFi.status() == WL_CONNECTED) {
+        cJSON_AddBoolToObject(response, "connected", true);
+        cJSON_AddStringToObject(response, "ssid", WiFi.SSID().c_str());
+        cJSON_AddStringToObject(response, "ip", WiFi.localIP().toString().c_str());
+        cJSON_AddNumberToObject(response, "rssi", WiFi.RSSI());
+    } else {
+        cJSON_AddBoolToObject(response, "connected", false);
+        cJSON_AddStringToObject(response, "status", "Disconnected");
+    }
+
+    char *response_string = cJSON_Print(response);
+    cJSON_Delete(response);
+    return response_string;
+}
+
+
+// WiFi status handler - returns current WiFi connection status
+char* apiUsbToggleHandlerHook(httpd_req_t *req) {
+    cJSON *response = cJSON_CreateObject();
+
+    if (WiFi.status() == WL_CONNECTED) {
+        cJSON_AddBoolToObject(response, "connected", true);
+        cJSON_AddStringToObject(response, "ssid", WiFi.SSID().c_str());
+        cJSON_AddStringToObject(response, "ip", WiFi.localIP().toString().c_str());
+        cJSON_AddNumberToObject(response, "rssi", WiFi.RSSI());
+    } else {
+        cJSON_AddBoolToObject(response, "connected", false);
+        cJSON_AddStringToObject(response, "status", "Disconnected");
     }
 
     char *response_string = cJSON_Print(response);
