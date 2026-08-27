@@ -77,9 +77,15 @@ void setup()
     // Derive AP credentials from the device MAC address.
     // SSID:     "ESP32-<last 4 hex digits of MAC>"  e.g. "ESP32-A1B2"
     // Password: last 8 hex digits of MAC            e.g. "C3D4E5F6"
-    // WiFi.macAddress() returns "XX:XX:XX:XX:XX:XX" — parse the last 4 bytes.
+    // ESP.getEfuseMac() reads the factory eFuse MAC — safe before WiFi init.
+    uint64_t chipId = ESP.getEfuseMac();
     uint8_t mac[6];
-    WiFi.macAddress(mac);
+    mac[0] = (chipId >> 40) & 0xFF;
+    mac[1] = (chipId >> 32) & 0xFF;
+    mac[2] = (chipId >> 24) & 0xFF;
+    mac[3] = (chipId >> 16) & 0xFF;
+    mac[4] = (chipId >>  8) & 0xFF;
+    mac[5] = (chipId >>  0) & 0xFF;
     snprintf(ap_ssid,     sizeof(ap_ssid),     "ESP32-%02X%02X",     mac[4], mac[5]);
     snprintf(ap_password, sizeof(ap_password), "%02X%02X%02X%02X", mac[2], mac[3], mac[4], mac[5]);
 
@@ -360,8 +366,14 @@ void loadAdminPasswordFromEEPROM() {
     }
 
     // No password saved yet — derive default from MAC and store it
+    uint64_t chipId = ESP.getEfuseMac();
     uint8_t mac[6];
-    WiFi.macAddress(mac);
+    mac[0] = (chipId >> 40) & 0xFF;
+    mac[1] = (chipId >> 32) & 0xFF;
+    mac[2] = (chipId >> 24) & 0xFF;
+    mac[3] = (chipId >> 16) & 0xFF;
+    mac[4] = (chipId >>  8) & 0xFF;
+    mac[5] = (chipId >>  0) & 0xFF;
     snprintf(adminPassword, sizeof(adminPassword),
              "%02X%02X%02X%02X", mac[2], mac[3], mac[4], mac[5]);
     saveAdminPassword(adminPassword);
