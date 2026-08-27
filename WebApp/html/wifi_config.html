@@ -18,7 +18,10 @@
         </div>
         <div class="form-group">
             <label>Password</label>
-            <input type="password" id="wifiPass" class="form-control" placeholder="Leave empty for open networks">
+            <div class="input-with-toggle">
+                <input type="password" id="wifiPass" class="form-control" placeholder="Leave empty for open networks">
+                <button type="button" class="btn-pw-toggle" onclick="togglePwField('wifiPass',this)" title="Show/hide password">&#128065;</button>
+            </div>
         </div>
         <button type="submit" class="btn btn-primary" id="connectBtn">Connect</button>
     </form>
@@ -95,5 +98,12 @@
 
     function escHtmlW(s) {
         return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function togglePwField(id, btn) {
+        const inp = document.getElementById(id);
+        const hidden = inp.type === 'password';
+        inp.type = hidden ? 'text' : 'password';
+        btn.textContent = hidden ? '\uD83D\uDE48' : '\uD83D\uDC41';
     }
 </script>
