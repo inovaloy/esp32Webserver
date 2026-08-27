@@ -683,3 +683,125 @@ a:hover { text-decoration: underline; }
 #networkList { margin-bottom: 4px; max-height: 260px; overflow-y: auto; }
 
 #wifiMessage { margin-top: 12px; display: none; }
+
+/* ── Avatar menu + dropdown ──────────────────────────────────────────────── */
+.avatar-menu {
+    position: relative;
+}
+
+.avatar-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 5px 10px;
+    cursor: pointer;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+}
+.avatar-btn:hover { background: var(--surface-3); border-color: var(--green-border); }
+
+.avatar-icon  { font-size: 18px; line-height: 1; }
+.avatar-label { display: inline; }
+.avatar-caret { font-size: 9px; color: var(--text-faint); transition: transform 0.2s; }
+.avatar-btn[aria-expanded="true"] .avatar-caret { transform: rotate(180deg); }
+
+.avatar-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 200px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    z-index: 500;
+    overflow: hidden;
+}
+.avatar-dropdown.open { display: block; }
+
+.dropdown-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px 10px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-muted);
+}
+.dropdown-user-icon { font-size: 20px; }
+
+.dropdown-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 2px 0;
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 14px;
+    background: none;
+    border: none;
+    text-align: left;
+    font-size: 14px;
+    color: var(--text);
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.12s;
+    white-space: nowrap;
+}
+.dropdown-item:hover { background: var(--surface-2); text-decoration: none; }
+.dropdown-item-danger { color: var(--red); }
+.dropdown-item-danger:hover { background: var(--red-light); }
+
+/* ── Bottom nav (mobile) ─────────────────────────────────────────────────── */
+.bottom-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    margin-top: 20px;
+    padding: 10px 0 4px;
+    border-top: 1px solid var(--border);
+}
+
+.bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    flex: 1;
+    padding: 6px 8px;
+    color: var(--text-faint);
+    text-decoration: none;
+    border-radius: var(--radius-sm);
+    transition: color 0.15s, background 0.15s;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+.bottom-nav-item:hover { color: var(--green); background: var(--green-light); text-decoration: none; }
+.bottom-nav-item.nav-link-active { color: var(--green); }
+
+.bottom-nav-icon  { font-size: 20px; line-height: 1; }
+.bottom-nav-label { line-height: 1; }
+
+/* ── Mobile: hide avatar label, shrink wifi badge ────────────────────────── */
+@media (max-width: 480px) {
+    .avatar-label { display: none; }
+    .wifi-badge   { display: none; }
+    .header h1    { font-size: 1rem; }
+}
+
+/* ── Container: add bottom padding on mobile so content clears bottom nav ── */
+@media (max-width: 600px) {
+    .container { padding-bottom: 8px; }
+}

@@ -53,6 +53,10 @@ class ESP32WebAPI {
         return this.post('/api/logout', {});
     }
 
+    async reboot() {
+        return this.post('/api/reboot', {});
+    }
+
     async changePassword(current, newPassword) {
         return this.post('/api/auth/change-password', { current, 'new': newPassword });
     }

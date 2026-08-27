@@ -110,3 +110,7 @@ contentTypes: &contentTypes
 "/api/device-config" :
     rtnType: *rtnJSON
     reqType: *httpGET
+
+"/api/reboot" :
+    rtnType: *rtnJSON
+    reqType: *httpPOST

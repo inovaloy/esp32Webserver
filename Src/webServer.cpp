@@ -280,6 +280,22 @@ char* apiDeviceConfigHandlerHook(httpd_req_t *req) {
     return out;
 }
 
+// POST /api/reboot — send response then reboot after a short delay
+char* apiRebootHandlerHook(httpd_req_t *req) {
+    if (!isAuthorised(req)) { sendUnauthorised(req); return nullptr; }
+    cJSON *response = cJSON_CreateObject();
+    cJSON_AddBoolToObject(response, "success", true);
+    cJSON_AddStringToObject(response, "message", "Rebooting...");
+    char *out = cJSON_Print(response);
+    cJSON_Delete(response);
+    // Schedule reboot after 500 ms so the HTTP response can be sent first
+    // Using a one-shot timer via delay — httpd task will send the response
+    // before ESP.restart() is called because the handler returns first.
+    extern void scheduleReboot();
+    scheduleReboot();
+    return out;
+}
+
 // GET /api/devices
 char* apiDevicesHandlerHook(httpd_req_t *req) {
     cJSON *response = cJSON_CreateObject();

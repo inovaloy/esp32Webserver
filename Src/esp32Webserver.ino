@@ -42,12 +42,15 @@ const IPAddress netMsk(255, 255, 255, 0);
 DNSServer dnsServer;
 bool isAPMode = false;
 int counter = 0;
+volatile bool rebootScheduled = false;
+unsigned long rebootAt = 0;
 
 // Function declarations
 bool eepromIsValid();
 bool connectToWiFi();
 void displayWiFiInfo();
 void startAPMode();
+void scheduleReboot();
 String readStringFromEEPROM(int addr, int maxLength);
 void writeStringToEEPROM(int addr, String data, int maxLength);
 void loadDevicesFromEEPROM();
@@ -121,6 +124,15 @@ void loop()
     if (isAPMode) {
         dnsServer.processNextRequest();
     }
+    if (rebootScheduled && millis() >= rebootAt) {
+        Serial.println("Rebooting...");
+        ESP.restart();
+    }
+}
+
+void scheduleReboot() {
+    rebootAt = millis() + 800;   // 800 ms — enough for HTTP response to flush
+    rebootScheduled = true;
 }
 
 // Returns true if EEPROM has been written by this firmware at least once

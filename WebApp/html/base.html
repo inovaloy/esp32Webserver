@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Home Controller</title>
-    <link rel="stylesheet" href="/Css/style.css?v=3">
+    <link rel="stylesheet" href="/Css/style.css?v=4">
     <script>
         (function(){
             var t=localStorage.getItem('theme');
@@ -18,18 +18,55 @@
     <div id="alertContainer"></div>
 
     <div class="container" id="shell">
+
+        <!-- ── Header ─────────────────────────────────────────────── -->
         <div class="header">
             <h1>Home Controller</h1>
             <div class="header-right">
+                <!-- WiFi status badge -->
                 <div id="wifiStatus" class="wifi-badge">
                     <span class="status-indicator status-connecting"></span>
                     <span id="wifiLabel">Checking...</span>
                 </div>
+
+                <!-- Theme toggle -->
                 <button class="btn-icon" id="themeToggle" title="Toggle dark/light mode">&#9790;</button>
-                <button class="btn-icon" id="logoutBtn" title="Logout">&#10226;</button>
+
+                <!-- Admin avatar + dropdown -->
+                <div class="avatar-menu" id="avatarMenu">
+                    <button class="avatar-btn" id="avatarBtn" title="Admin menu">
+                        <span class="avatar-icon">&#128100;</span>
+                        <span class="avatar-label">Admin</span>
+                        <span class="avatar-caret">&#9660;</span>
+                    </button>
+                    <div class="avatar-dropdown" id="avatarDropdown">
+                        <div class="dropdown-header">
+                            <span class="dropdown-user-icon">&#128100;</span>
+                            <span>Admin</span>
+                        </div>
+                        <div class="dropdown-divider"></div>
+                        <a href="#dashboard" class="dropdown-item" id="menuDashboard">
+                            &#8962; Dashboard
+                        </a>
+                        <a href="#wifi" class="dropdown-item" id="menuWifi">
+                            &#9881; WiFi Settings
+                        </a>
+                        <div class="dropdown-divider"></div>
+                        <button class="dropdown-item" id="menuChangePw">
+                            &#128274; Change Password
+                        </button>
+                        <button class="dropdown-item dropdown-item-danger" id="menuReboot">
+                            &#9863; Reboot Device
+                        </button>
+                        <button class="dropdown-item dropdown-item-danger" id="menuLogout">
+                            &#10226; Logout
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 
+        <!-- ── Page content ───────────────────────────────────────── -->
         <div id="app">
             <div class="loading">
                 <div class="loading-spinner"></div>
@@ -37,15 +74,21 @@
             </div>
         </div>
 
-        <div class="footer-links" id="shellFooter" style="display:none;">
-            <a href="#dashboard" class="link-small nav-link">&#8962; Dashboard</a>
-            <span class="footer-sep">&middot;</span>
-            <a href="#wifi" class="link-small nav-link">&#9881; WiFi Settings</a>
-            <span class="footer-sep">&middot;</span>
-            <a href="#" class="link-small" id="changePwBtn">&#128274; Change Password</a>
-        </div>
+        <!-- ── Bottom nav (mobile) ────────────────────────────────── -->
+        <nav class="bottom-nav" id="bottomNav" style="display:none;">
+            <a href="#dashboard" class="bottom-nav-item nav-link" id="bnDashboard">
+                <span class="bottom-nav-icon">&#8962;</span>
+                <span class="bottom-nav-label">Dashboard</span>
+            </a>
+            <a href="#wifi" class="bottom-nav-item nav-link" id="bnWifi">
+                <span class="bottom-nav-icon">&#9881;</span>
+                <span class="bottom-nav-label">WiFi</span>
+            </a>
+        </nav>
+
     </div>
 
+    <!-- ── Change password modal ──────────────────────────────────── -->
     <div id="changePwModal" class="modal-backdrop" style="display:none;">
         <div class="modal-box">
             <h3>Change Admin Password</h3>
@@ -54,14 +97,14 @@
                 <label>Current Password</label>
                 <div class="input-with-toggle">
                     <input type="password" id="curPw" class="form-control" placeholder="Current password">
-                    <button type="button" class="btn-pw-toggle" id="toggleCurPw" title="Show/hide password">&#128065;</button>
+                    <button type="button" class="btn-pw-toggle" id="toggleCurPw" title="Show/hide">&#128065;</button>
                 </div>
             </div>
             <div class="form-group">
                 <label>New Password</label>
                 <div class="input-with-toggle">
                     <input type="password" id="newPw" class="form-control" placeholder="New password (min 6 chars)">
-                    <button type="button" class="btn-pw-toggle" id="toggleNewPw" title="Show/hide password">&#128065;</button>
+                    <button type="button" class="btn-pw-toggle" id="toggleNewPw" title="Show/hide">&#128065;</button>
                 </div>
             </div>
             <div class="modal-actions">
@@ -71,7 +114,21 @@
         </div>
     </div>
 
-    <script src="/Js/app.js?v=3"></script>
+    <!-- ── Reboot confirm modal ───────────────────────────────────── -->
+    <div id="rebootModal" class="modal-backdrop" style="display:none;">
+        <div class="modal-box">
+            <h3>Reboot Device?</h3>
+            <p style="color:var(--text-muted);font-size:14px;margin:0 0 20px;">
+                The device will restart. You will be disconnected for a few seconds.
+            </p>
+            <div class="modal-actions">
+                <button class="btn btn-danger" id="confirmRebootBtn">Reboot</button>
+                <button class="btn btn-cancel" id="cancelRebootBtn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/Js/app.js?v=4"></script>
     <script>
         if (!localStorage.getItem('authToken')) {
             window.location.replace('/login');
@@ -80,9 +137,10 @@
         window.addEventListener('load', function () {
             loadWifiStatus();
             router();
-            document.getElementById('shellFooter').style.display = '';
+            document.getElementById('bottomNav').style.display = '';
         });
 
+        // ── WiFi status ─────────────────────────────────────────────
         async function loadWifiStatus() {
             const result = await api.getWiFiStatus();
             const badge  = document.getElementById('wifiStatus');
@@ -97,6 +155,7 @@
         }
         setInterval(loadWifiStatus, 30000);
 
+        // ── SPA Router ──────────────────────────────────────────────
         const PAGES = {
             '':          '/page/dashboard',
             'dashboard': '/page/dashboard',
@@ -108,7 +167,9 @@
             const fragUrl = PAGES[hash] || PAGES['dashboard'];
             await loadFragment(fragUrl);
             document.querySelectorAll('.nav-link').forEach(a => {
-                a.classList.toggle('nav-link-active', a.getAttribute('href') === '#' + hash);
+                a.classList.toggle('nav-link-active',
+                    a.getAttribute('href') === '#' + hash ||
+                    (hash === '' && a.getAttribute('href') === '#dashboard'));
             });
         }
         window.addEventListener('hashchange', router);
@@ -130,13 +191,95 @@
             }
         }
 
-        document.getElementById('logoutBtn').addEventListener('click', async function () {
+        // ── Avatar dropdown ─────────────────────────────────────────
+        const avatarBtn      = document.getElementById('avatarBtn');
+        const avatarDropdown = document.getElementById('avatarDropdown');
+
+        avatarBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const open = avatarDropdown.classList.toggle('open');
+            avatarBtn.setAttribute('aria-expanded', open);
+        });
+        // Close when clicking anywhere else
+        document.addEventListener('click', function() {
+            avatarDropdown.classList.remove('open');
+            avatarBtn.setAttribute('aria-expanded', false);
+        });
+        avatarDropdown.addEventListener('click', function(e) { e.stopPropagation(); });
+
+        // Close dropdown on nav link click
+        document.querySelectorAll('#avatarDropdown a.dropdown-item').forEach(a => {
+            a.addEventListener('click', () => avatarDropdown.classList.remove('open'));
+        });
+
+        // ── Theme toggle ────────────────────────────────────────────
+        (function() {
+            const btn = document.getElementById('themeToggle');
+            function applyTheme(dark) {
+                dark ? document.documentElement.setAttribute('data-theme','dark')
+                     : document.documentElement.removeAttribute('data-theme');
+                btn.textContent = dark ? '\u2600' : '\u263D';
+            }
+            applyTheme(document.documentElement.getAttribute('data-theme') === 'dark');
+            btn.addEventListener('click', function() {
+                const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                localStorage.setItem('theme', isDark ? 'light' : 'dark');
+                applyTheme(!isDark);
+            });
+        })();
+
+        // ── Logout ──────────────────────────────────────────────────
+        document.getElementById('menuLogout').addEventListener('click', async function() {
             await api.logout();
             localStorage.removeItem('authToken');
             window.location.replace('/login');
         });
 
-        // Password toggle helpers for the modal
+        // ── Reboot ──────────────────────────────────────────────────
+        document.getElementById('menuReboot').addEventListener('click', function() {
+            avatarDropdown.classList.remove('open');
+            document.getElementById('rebootModal').style.display = 'flex';
+        });
+        document.getElementById('cancelRebootBtn').addEventListener('click', function() {
+            document.getElementById('rebootModal').style.display = 'none';
+        });
+        document.getElementById('confirmRebootBtn').addEventListener('click', async function() {
+            this.disabled = true;
+            this.textContent = 'Rebooting...';
+            await api.reboot();
+            document.getElementById('rebootModal').style.display = 'none';
+            Utils.showAlert('Device is rebooting. Reconnect in a few seconds.', 'info');
+            this.disabled = false;
+            this.textContent = 'Reboot';
+        });
+
+        // ── Change password ─────────────────────────────────────────
+        document.getElementById('menuChangePw').addEventListener('click', function() {
+            avatarDropdown.classList.remove('open');
+            document.getElementById('changePwModal').style.display = 'flex';
+        });
+        document.getElementById('cancelPwBtn').addEventListener('click', function() {
+            document.getElementById('changePwModal').style.display = 'none';
+            document.getElementById('curPw').value = '';
+            document.getElementById('newPw').value = '';
+        });
+        document.getElementById('savePwBtn').addEventListener('click', async function() {
+            const cur = document.getElementById('curPw').value;
+            const nw  = document.getElementById('newPw').value;
+            if (!cur || !nw) { Utils.showAlert('Both fields are required', 'danger', 'modalAlertContainer'); return; }
+            this.disabled = true; this.textContent = 'Saving...';
+            const result = await api.changePassword(cur, nw);
+            this.disabled = false; this.textContent = 'Save';
+            if (result.success && result.data && result.data.success) {
+                document.getElementById('changePwModal').style.display = 'none';
+                localStorage.removeItem('authToken');
+                window.location.replace('/login');
+            } else {
+                Utils.showAlert((result.data && result.data.message) || 'Failed', 'danger', 'modalAlertContainer');
+            }
+        });
+
+        // Password toggle helpers
         function bindPwToggle(btnId, inputId) {
             document.getElementById(btnId).addEventListener('click', function() {
                 const inp = document.getElementById(inputId);
@@ -147,31 +290,6 @@
         }
         bindPwToggle('toggleCurPw', 'curPw');
         bindPwToggle('toggleNewPw', 'newPw');
-
-        document.getElementById('changePwBtn').addEventListener('click', function(e) {
-            e.preventDefault();
-            document.getElementById('changePwModal').style.display = 'flex';
-        });
-        document.getElementById('cancelPwBtn').addEventListener('click', function () {
-            document.getElementById('changePwModal').style.display = 'none';
-            document.getElementById('curPw').value = '';
-            document.getElementById('newPw').value = '';
-        });
-        document.getElementById('savePwBtn').addEventListener('click', async function () {
-            const cur = document.getElementById('curPw').value;
-            const nw  = document.getElementById('newPw').value;
-            if (!cur || !nw) { Utils.showAlert('Both fields are required', 'danger', 'modalAlertContainer'); return; }
-            this.disabled = true; this.textContent = 'Saving...';
-            const result = await api.changePassword(cur, nw);
-            this.disabled = false; this.textContent = 'Save';
-            if (result.success && result.data.success) {
-                document.getElementById('changePwModal').style.display = 'none';
-                localStorage.removeItem('authToken');
-                window.location.replace('/login');
-            } else {
-                Utils.showAlert(result.data?.message || 'Failed', 'danger', 'modalAlertContainer');
-            }
-        });
     </script>
 </body>
 </html>
