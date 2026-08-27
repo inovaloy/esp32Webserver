@@ -70,6 +70,9 @@ void webHandlerHook(webServerMacro hook)
 char* apiLoginHandlerHook(httpd_req_t *req) {
     char* jsonData = getContentFromReq(req);
 
+    Serial.printf("[LOGIN] content_len=%d body=%s\n",
+                  req->content_len, jsonData ? jsonData : "(null)");
+
     cJSON *json = (jsonData != nullptr) ? cJSON_Parse(jsonData) : NULL;
     cJSON *response = cJSON_CreateObject();
 
@@ -79,6 +82,10 @@ char* apiLoginHandlerHook(httpd_req_t *req) {
     } else {
         cJSON *pass_j = cJSON_GetObjectItem(json, "password");
         if (!cJSON_IsString(pass_j)) {
+            Serial.printf("[LOGIN] keys in json: ");
+            cJSON *item = json->child;
+            while (item) { Serial.printf("%s ", item->string); item = item->next; }
+            Serial.println();
             cJSON_AddBoolToObject(response, "success", false);
             cJSON_AddStringToObject(response, "message", "password field required");
         } else {
