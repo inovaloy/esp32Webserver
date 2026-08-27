@@ -26,19 +26,7 @@ contentTypes: &contentTypes
 "/" :
     rtnType : *rtnHTML
     fileName: "index.html"
-    macro   : "INDEX_HTML"
-    reqType : *httpGET
-
-"/home" :
-    rtnType : *rtnHTML
-    fileName: "home.html"
-    macro   : "HOME_HTML"
-    reqType : *httpGET
-
-"/dshbrd" :
-    rtnType : *rtnHTML
-    fileName: "dashboard.html"
-    macro   : "DASHBOARD_HTML"
+    macro   : "BASE_HTML"
     reqType : *httpGET
 
 "/login" :
@@ -47,13 +35,13 @@ contentTypes: &contentTypes
     macro   : "LOGIN_HTML"
     reqType : *httpGET
 
-"/logout" :
+"/page/dashboard" :
     rtnType : *rtnHTML
-    fileName: "logout.html"
-    macro   : "LOGOUT_HTML"
+    fileName: "dashboard.html"
+    macro   : "DASHBOARD_HTML"
     reqType : *httpGET
 
-"/wifi_config" :
+"/page/wifi" :
     rtnType : *rtnHTML
     fileName: "wifi_config.html"
     macro   : "WIFI_CONFIG_HTML"
@@ -76,21 +64,18 @@ contentTypes: &contentTypes
     contentType: *jsType
     reqType    : *httpGET
 
-"/Image/twoFlower.jpg" :
-    rtnType    : *rtnASSET
-    fileName   : "Image/twoFlower.jpg"
-    macro      : "TWO_FLOWER_JPG"
-    contentType: *jpgType
-    reqType    : *httpGET
-
 
 # REST API Endpoints - JSON data exchange for dynamic functionality
-# Backend services for user authentication and WiFi network management
+# Backend services for user authentication, WiFi management, and device control
 "/api/login" :
     rtnType: *rtnJSON
     reqType: *httpPOST
 
-"/api/register" :
+"/api/logout" :
+    rtnType: *rtnJSON
+    reqType: *httpPOST
+
+"/api/auth/change-password" :
     rtnType: *rtnJSON
     reqType: *httpPOST
 
@@ -103,5 +88,21 @@ contentTypes: &contentTypes
     reqType: *httpGET
 
 "/api/wifi/connect" :
+    rtnType: *rtnJSON
+    reqType: *httpPOST
+
+"/api/devices" :
+    rtnType: *rtnJSON
+    reqType: *httpGET
+
+"/api/devices/add" :
+    rtnType: *rtnJSON
+    reqType: *httpPOST
+
+"/api/devices/remove" :
+    rtnType: *rtnJSON
+    reqType: *httpPOST
+
+"/api/devices/toggle" :
     rtnType: *rtnJSON
     reqType: *httpPOST
