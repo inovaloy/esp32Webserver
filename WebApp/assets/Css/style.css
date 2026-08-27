@@ -54,46 +54,39 @@
     color-scheme: light;
 }
 
-[data-theme="dark"], @media (prefers-color-scheme: dark) {
+/* System dark mode preference */
+@media (prefers-color-scheme: dark) {
     :root {
         --bg:           #141a14;
         --surface:      #1e281e;
         --surface-2:    #253025;
         --surface-3:    #2d3a2d;
-
         --border:       #3a4a3a;
         --border-focus: #4db862;
-
         --text:         #ddeedd;
         --text-muted:   #8faa8f;
         --text-faint:   #5a705a;
-
         --green:        #3db356;
         --green-hover:  #50c96b;
         --green-light:  #1e3321;
         --green-border: #2e6638;
-
         --red:          #e05c4f;
         --red-light:    #2e1a18;
         --red-border:   #7a3028;
-
         --yellow:       #d4a017;
         --yellow-light: #2a2210;
         --yellow-border:#7a5a10;
-
         --blue:         #4a9fd4;
         --blue-light:   #102030;
         --blue-border:  #1a4a6a;
-
         --toggle-off:   #3a4a3a;
         --shadow:       0 2px 8px rgba(0,0,0,0.4);
         --shadow-lg:    0 8px 32px rgba(0,0,0,0.6);
-
         color-scheme: dark;
     }
 }
 
-/* Support manual toggle via data-theme attribute */
+/* Manual dark mode toggle via data-theme="dark" on <html> */
 [data-theme="dark"] {
     --bg:           #141a14;
     --surface:      #1e281e;
