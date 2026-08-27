@@ -28,6 +28,14 @@ flash: build
 	cd Src && make flash ${PARAMS} && cd ..
 
 
+# Erase the entire chip flash then do a full flash.
+# Use this once when flashing after a different firmware/bootloader was on the chip.
+erase_flash:
+	$(ESP32_PATH)/tools/esptool/esptool --chip esp32 --port /dev/ttyUSB0 --baud 460800 erase_flash
+
+erase_and_flash: erase_flash flash
+
+
 configure:
 	mkdir -p $(TEMP_DIR)
 	@if [ -d "$(ESP32_PATH)" ]; then \
@@ -65,11 +73,13 @@ clean:
 
 help:
 	@echo "Available targets:"
-	@echo "  autogen    - Generate HTML, assets, and web server code"
-	@echo "  build      - Compile the sketch"
-	@echo "  flash      - Upload the compiled sketch to the ESP32 board"
-	@echo "  configure  - Set up the ESP32 Arduino environment"
-	@echo "  clean      - Clean up the build artifacts"
-	@echo "  help       - Show this help message"
+	@echo "  autogen        - Generate HTML, assets, and web server code"
+	@echo "  build          - Compile the sketch"
+	@echo "  flash          - Build and upload to ESP32"
+	@echo "  erase_flash    - Erase entire chip flash (use once to clear old firmware)"
+	@echo "  erase_and_flash - Erase chip then build and flash (fixes partition errors)"
+	@echo "  configure      - Set up the ESP32 Arduino environment"
+	@echo "  clean          - Clean up the build artifacts"
+	@echo "  help           - Show this help message"
 
-.PHONY: all autogen build flash configure clean help
+.PHONY: all autogen build flash erase_flash erase_and_flash configure clean help
