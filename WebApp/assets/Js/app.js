@@ -70,6 +70,11 @@ class ESP32WebAPI {
         return this.post('/api/wifi/connect', { ssid, password });
     }
 
+    // Device config (allowed pins + max devices)
+    async getDeviceConfig() {
+        return this.get('/api/device-config');
+    }
+
     // Device API methods
     async getDevices() {
         return this.get('/api/devices');

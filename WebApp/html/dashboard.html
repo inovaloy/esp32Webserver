@@ -19,8 +19,9 @@
             </div>
             <div class="form-group">
                 <label>GPIO Pin</label>
-                <input type="number" id="newDevicePin" class="form-control"
-                       placeholder="e.g. 26" min="0" max="39">
+                <select id="newDevicePin" class="form-control">
+                    <option value="">Loading pins...</option>
+                </select>
             </div>
         </div>
         <button class="btn btn-primary" id="addDeviceBtn">Add Device</button>
@@ -28,11 +29,44 @@
 </div>
 
 <script>
-    // ── Device rendering ──────────────────────────────────────────────
+    // ── Init ──────────────────────────────────────────────────────────
     (async function initDashboard() {
         await renderDevices();
+        await loadDeviceConfig();
     })();
 
+    // ── Device config (max devices + available pins) ───────────────────
+    async function loadDeviceConfig() {
+        const result = await api.getDeviceConfig();
+        if (!result.success) return;
+
+        const cfg        = result.data;
+        const atMax      = cfg.currentDevices >= cfg.maxDevices;
+        const addBtn     = document.getElementById('toggleAddForm');
+        const pinSelect  = document.getElementById('newDevicePin');
+
+        // Hide or show the Add button based on capacity
+        if (atMax) {
+            addBtn.disabled = true;
+            addBtn.textContent = '+ Add Device (limit reached)';
+            addBtn.title = `Maximum of ${cfg.maxDevices} devices reached`;
+        } else {
+            addBtn.disabled = false;
+            addBtn.textContent = '+ Add Device';
+            addBtn.title = '';
+        }
+
+        // Populate pin dropdown with available pins
+        if (cfg.availablePins.length === 0) {
+            pinSelect.innerHTML = '<option value="">No pins available</option>';
+        } else {
+            pinSelect.innerHTML = cfg.availablePins
+                .map(p => `<option value="${p}">GPIO ${p}</option>`)
+                .join('');
+        }
+    }
+
+    // ── Device rendering ──────────────────────────────────────────────
     async function renderDevices() {
         const result = await api.getDevices();
         const grid   = document.getElementById('deviceGrid');
@@ -78,7 +112,8 @@
         if (!confirm('Remove this device?')) return;
         const result = await api.removeDevice(index);
         if (result.success && result.data.success) {
-            renderDevices();
+            await renderDevices();
+            await loadDeviceConfig();   // refresh available pins after removal
         } else {
             Utils.showAlert('Failed to remove device', 'danger');
         }
@@ -93,9 +128,10 @@
 
     document.getElementById('addDeviceBtn').addEventListener('click', async function () {
         const name = document.getElementById('newDeviceName').value.trim();
-        const pin  = parseInt(document.getElementById('newDevicePin').value, 10);
+        const pinEl = document.getElementById('newDevicePin');
+        const pin  = parseInt(pinEl.value, 10);
         if (!name) { Utils.showAlert('Device name is required', 'danger'); return; }
-        if (isNaN(pin) || pin < 0 || pin > 39) { Utils.showAlert('Enter a valid GPIO pin (0–39)', 'danger'); return; }
+        if (isNaN(pin)) { Utils.showAlert('Select a GPIO pin', 'danger'); return; }
         this.disabled = true;
         this.textContent = 'Adding...';
         const result = await api.addDevice(name, pin);
@@ -103,12 +139,12 @@
         this.textContent = 'Add Device';
         if (result.success && result.data.success) {
             document.getElementById('newDeviceName').value = '';
-            document.getElementById('newDevicePin').value  = '';
             document.getElementById('addDeviceForm').style.display = 'none';
             document.getElementById('toggleAddForm').textContent = '+ Add Device';
-            renderDevices();
+            await renderDevices();
+            await loadDeviceConfig();   // refresh available pins after add
         } else {
-            Utils.showAlert(result.data?.message || 'Failed to add device', 'danger');
+            Utils.showAlert(result.data && result.data.message || 'Failed to add device', 'danger');
         }
     });
 

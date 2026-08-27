@@ -256,6 +256,30 @@ char* apiWifiConnectHandlerHook(httpd_req_t *req) {
 
 // ── Device API ────────────────────────────────────────────────────────────
 
+// GET /api/device-config — returns maxDevices and available (unallocated) pins
+char* apiDeviceConfigHandlerHook(httpd_req_t *req) {
+    bool inUse[256] = {false};
+    for (uint8_t i = 0; i < deviceCount; i++)
+        inUse[devices[i].pin] = true;
+
+    cJSON *response  = cJSON_CreateObject();
+    cJSON *available = cJSON_CreateArray();
+
+    for (int i = 0; i < CFG_PIN_COUNT; i++) {
+        uint8_t pin = CFG_ALLOWED_PINS[i];
+        if (!inUse[pin])
+            cJSON_AddItemToArray(available, cJSON_CreateNumber(pin));
+    }
+
+    cJSON_AddNumberToObject(response, "maxDevices",     CFG_MAX_DEVICES);
+    cJSON_AddNumberToObject(response, "currentDevices", deviceCount);
+    cJSON_AddItemToObject(response,   "availablePins",  available);
+
+    char *out = cJSON_Print(response);
+    cJSON_Delete(response);
+    return out;
+}
+
 // GET /api/devices
 char* apiDevicesHandlerHook(httpd_req_t *req) {
     cJSON *response = cJSON_CreateObject();

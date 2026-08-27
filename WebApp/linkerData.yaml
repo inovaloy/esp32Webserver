@@ -106,3 +106,7 @@ contentTypes: &contentTypes
 "/api/devices/toggle" :
     rtnType: *rtnJSON
     reqType: *httpPOST
+
+"/api/device-config" :
+    rtnType: *rtnJSON
+    reqType: *httpGET

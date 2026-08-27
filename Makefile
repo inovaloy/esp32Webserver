@@ -15,6 +15,7 @@ all: help
 
 # Autogen target that builds HTML, assets, and web server code
 autogen:
+	python3 Scripts/compileDeviceConfig.py
 	python3 Scripts/compileHtml.py
 	python3 Scripts/compileAssets.py
 	python3 Scripts/updateWebServer.py

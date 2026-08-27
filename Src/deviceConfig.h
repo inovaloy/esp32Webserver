@@ -2,6 +2,7 @@
 #define DEVICE_CONFIG_H
 
 #include <stdint.h>
+#include "AutoGen/autoGenDeviceConfig.h"
 
 // ── EEPROM map ────────────────────────────────────────────────────────────
 //   0 –  31 : WiFi SSID          (32 bytes)
@@ -15,8 +16,8 @@
 #define ADMIN_PASS_ADDR   164
 #define ADMIN_PASS_LEN    32
 
-// Maximum number of controllable GPIO devices
-#define MAX_DEVICES       16
+// Maximum devices driven by deviceConfig.yaml (via autoGenDeviceConfig.h)
+#define MAX_DEVICES       CFG_MAX_DEVICES
 
 // EEPROM layout for device storage
 #define DEVICE_COUNT_ADDR 210

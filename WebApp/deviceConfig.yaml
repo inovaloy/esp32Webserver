@@ -1,0 +1,20 @@
+# Device Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+# maxDevices: how many GPIO devices can be added (must be <= 16)
+#
+# gpioPins: ordered list of allowed GPIO pins.
+#   - Only the first `maxDevices` entries are used.
+#   - If fewer entries than maxDevices, the list is the limit.
+#   - Once a pin is assigned to a device it disappears from the Add form.
+
+maxDevices: 8
+
+gpioPins:
+  - 26
+  - 27
+  - 25
+  - 33
+  - 32
+  - 19
+  - 18
+  - 5
