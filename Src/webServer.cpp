@@ -11,13 +11,14 @@
 #include <string.h>
 
 // Device state and admin auth owned by the .ino
-extern Device  devices[];
-extern uint8_t deviceCount;
-extern void    saveDevicesToEEPROM();
-extern void    updateOledDeviceStatus();
-extern char    adminPassword[];
-extern void    saveAdminPassword(const char* newPassword);
-extern bool    checkAdminPassword(const char* attempt);
+extern Device       devices[];
+extern uint8_t      deviceCount;
+extern void         saveDevicesToEEPROM();
+extern void         updateOledDeviceStatus();
+extern char         adminPassword[];
+extern void         saveAdminPassword(const char* newPassword);
+extern bool         checkAdminPassword(const char* attempt);
+extern volatile bool eepromDirty;   // committed from main task loop()
 
 // ── Session token (single slot, RAM only — cleared on reboot) ─────────────
 #define SESSION_TOKEN_LEN 32
@@ -232,7 +233,7 @@ char* apiWifiConnectHandlerHook(httpd_req_t *req) {
                 for (int i = 0; i < 64; i++)
                     EEPROM.write(100 + i, i < (int)pass.length() ? pass[i] : 0);
                 EEPROM.write(200, 0xA5);
-                EEPROM.commit();
+                eepromDirty = true;  // committed from loop() in the main task
                 cJSON_AddBoolToObject(response, "success", true);
                 cJSON_AddStringToObject(response, "message", "Connected");
                 cJSON_AddStringToObject(response, "ip", WiFi.localIP().toString().c_str());

@@ -125,13 +125,15 @@ void loop()
     if (isAPMode) {
         dnsServer.processNextRequest();
     }
-    // Flush any pending EEPROM write from the httpd task first, then reboot
+    // Commit EEPROM from the main task — EEPROM.commit() must be called from the
+    // same task that called EEPROM.begin(), which is this one (the Arduino main task).
+    // The httpd FreeRTOS task only writes to the RAM buffer and sets this flag.
+    if (eepromDirty) {
+        EEPROM.commit();
+        eepromDirty = false;
+        Serial.println("[EEPROM] committed from main task");
+    }
     if (rebootScheduled && millis() >= rebootAt) {
-        if (eepromDirty) {
-            EEPROM.commit();
-            eepromDirty = false;
-            delay(50);   // let NVS finish writing before reset
-        }
         Serial.println("Rebooting...");
         ESP.restart();
     }
@@ -171,7 +173,7 @@ void writeStringToEEPROM(int addr, String data, int maxLength) {
         }
     }
     EEPROM.write(EEPROM_MAGIC_ADDR, EEPROM_MAGIC_BYTE);
-    EEPROM.commit();
+    eepromDirty = true;  // committed from loop() in the main task
 }
 
 // Function to attempt WiFi connection
@@ -299,9 +301,10 @@ void saveDevicesToEEPROM() {
         EEPROM.write(base + DEVICE_NAME_LEN + 1, devices[i].state);
     }
     EEPROM.write(EEPROM_MAGIC_ADDR, EEPROM_MAGIC_BYTE);
-    // Commit from the httpd task — mark dirty so loop() can do a second
-    // commit just before ESP.restart() to guarantee the write completed.
-    EEPROM.commit();
+    // Do NOT call EEPROM.commit() here — this runs in the httpd FreeRTOS task,
+    // which does not own the NVS handle opened by EEPROM.begin() in setup().
+    // Calling commit() from the wrong task silently does nothing on ESP32 Arduino.
+    // Set the dirty flag instead; loop() will commit from the correct main task.
     eepromDirty = true;
 }
 
@@ -365,7 +368,9 @@ void saveAdminPassword(const char* newPassword) {
     for (int i = 0; i < ADMIN_PASS_LEN; i++)
         EEPROM.write(ADMIN_PASS_ADDR + i, (uint8_t)adminPassword[i]);
     EEPROM.write(EEPROM_MAGIC_ADDR, EEPROM_MAGIC_BYTE);
-    EEPROM.commit();
+    // Same rule: if called from httpd task, only set dirty flag.
+    // If called from setup() (first boot), commit directly — setup() IS the main task.
+    eepromDirty = true;
 }
 
 bool checkAdminPassword(const char* attempt) {
