@@ -260,9 +260,14 @@ void startAPMode() {
 // ── EEPROM: devices ───────────────────────────────────────────────────────
 
 void loadDevicesFromEEPROM() {
-    if (!eepromIsValid()) { deviceCount = 0; return; }
+    Serial.printf("[EEPROM] magic=0x%02X count_addr=%d count=0x%02X\n",
+                  EEPROM.read(EEPROM_MAGIC_ADDR),
+                  DEVICE_COUNT_ADDR,
+                  EEPROM.read(DEVICE_COUNT_ADDR));
+
+    if (!eepromIsValid()) { deviceCount = 0; Serial.println("[EEPROM] invalid magic — skipping device load"); return; }
     deviceCount = EEPROM.read(DEVICE_COUNT_ADDR);
-    if (deviceCount > MAX_DEVICES) deviceCount = 0;
+    if (deviceCount > MAX_DEVICES) { Serial.printf("[EEPROM] count %d > max %d — reset\n", deviceCount, MAX_DEVICES); deviceCount = 0; }
     for (uint8_t i = 0; i < deviceCount; i++) {
         int base = DEVICE_BASE_ADDR + i * DEVICE_SLOT_SIZE;
         for (int j = 0; j < DEVICE_NAME_LEN; j++)
@@ -272,7 +277,7 @@ void loadDevicesFromEEPROM() {
         devices[i].state = EEPROM.read(base + DEVICE_NAME_LEN + 1);
         pinMode(devices[i].pin, OUTPUT);
         digitalWrite(devices[i].pin, devices[i].state ? HIGH : LOW);
-        Serial.printf("Loaded device[%d]: %s pin=%d state=%d\n",
+        Serial.printf("[EEPROM] device[%d]: name=%s pin=%d state=%d\n",
                       i, devices[i].name, devices[i].pin, devices[i].state);
     }
 }
