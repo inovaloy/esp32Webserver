@@ -1,8 +1,6 @@
 #include <WiFi.h>
-#include <WebServer.h>
 #include <DNSServer.h>
 #include <EEPROM.h>
-#include "esp_efuse.h"
 #include "AutoGen/autoGenWebServer.h"
 #include "deviceConfig.h"
 #include <SPI.h>
@@ -56,7 +54,6 @@ const IPAddress netMsk(255, 255, 255, 0);
 
 // DNS Server for captive portal
 DNSServer dnsServer;
-WebServer configServer(80);
 
 bool isAPMode = false;
 int counter = 0;
@@ -80,9 +77,9 @@ void setup()
     // Derive AP credentials from the device MAC address.
     // SSID:     "ESP32-<last 4 hex digits of MAC>"  e.g. "ESP32-A1B2"
     // Password: last 8 hex digits of MAC            e.g. "C3D4E5F6"
-    // This makes every device unique without needing any configuration.
+    // WiFi.macAddress() returns "XX:XX:XX:XX:XX:XX" — parse the last 4 bytes.
     uint8_t mac[6];
-    esp_efuse_mac_get_default(mac);
+    WiFi.macAddress(mac);
     snprintf(ap_ssid,     sizeof(ap_ssid),     "ESP32-%02X%02X",     mac[4], mac[5]);
     snprintf(ap_password, sizeof(ap_password), "%02X%02X%02X%02X", mac[2], mac[3], mac[4], mac[5]);
 
@@ -130,7 +127,6 @@ void loop()
 {
     if (isAPMode) {
         dnsServer.processNextRequest();
-        configServer.handleClient();
     }
 }
 
@@ -365,7 +361,7 @@ void loadAdminPasswordFromEEPROM() {
 
     // No password saved yet — derive default from MAC and store it
     uint8_t mac[6];
-    esp_efuse_mac_get_default(mac);
+    WiFi.macAddress(mac);
     snprintf(adminPassword, sizeof(adminPassword),
              "%02X%02X%02X%02X", mac[2], mac[3], mac[4], mac[5]);
     saveAdminPassword(adminPassword);

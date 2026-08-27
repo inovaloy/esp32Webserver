@@ -19,7 +19,7 @@ LIBS = $(ESP32_PATH)/libraries/WiFi \
        $(ROOT)/Libs/Adafruit_BusIO
 
 # Exclude unnecessary features to reduce binary size
-EXCLUDE_DIRS = $(SRC_DIR)|SPITFT|SPIDevice|NetworkClientSecure|ssl_client
+EXCLUDE_DIRS = $(SRC_DIR)|SPITFT|SPIDevice|NetworkClientSecure|ssl_client|WebServer
 
 # Compiler optimization: Optimize for size (-Os) and disable debug
 BUILD_EXTRA_FLAGS = -Os -DCORE_DEBUG_LEVEL=0

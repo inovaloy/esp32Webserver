@@ -173,10 +173,20 @@ def processAsset(filePath, fileName, enableCompression=True, assetInfo=None, cac
     contentType = SUPPORTED_ASSET_EXTENSIONS.get(ext, 'application/octet-stream')
     arrStrName = convertToCamelCase(fileName)
     arrStrLength = arrStrName + "Len"
+    compressedName = fileName + ".gz"
 
-    # Skip if source unchanged (cache hit)
-    if isFileUnchanged(filePath, cache):
-        print(f"Processing: {fileName:<30} unchanged — skipping")
+    # Derive the path where we store the cached gz file
+    cachedGzPath = os.path.join(BUILD_DIR, "assets_gz", compressedName.replace("/", "_"))
+
+    # If source unchanged and cached gz exists, reuse it — but still write to header
+    if isFileUnchanged(filePath, cache) and os.path.exists(cachedGzPath):
+        print(f"Processing: {fileName:<30} unchanged — reusing cache")
+        with open(cachedGzPath, 'rb') as f:
+            compressedData = f.read()
+        compressedSize = len(compressedData)
+        # Still add to header and return
+        updateHeaderFile(fileName, compressedName, compressedData, compressedSize,
+                        arrStrName, arrStrLength, contentType)
         return
 
     print(f"Processing: {fileName}")
@@ -192,7 +202,10 @@ def processAsset(filePath, fileName, enableCompression=True, assetInfo=None, cac
     compressedData = gzip.compress(binaryData)
     compressedSize = len(compressedData)
 
-    compressedName = fileName + ".gz"
+    # Persist gz to cache directory for future runs
+    os.makedirs(os.path.dirname(cachedGzPath), exist_ok=True)
+    with open(cachedGzPath, 'wb') as f:
+        f.write(compressedData)
 
     # Store info
     InfoData[fileName] = {
