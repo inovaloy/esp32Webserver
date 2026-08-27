@@ -27,6 +27,12 @@ BUILD_EXTRA_FLAGS = -Os -DCORE_DEBUG_LEVEL=0
 ESP_ROOT = $(ESP32_PATH)
 CHIP = esp32
 
+# Flash mode/freq — qio+80m matches standard ESP32 DevKit modules.
+# The DIO default from boards.txt causes "partition 0 invalid magic number"
+# on most generic boards because the bootloader header byte is wrong.
+FLASH_MODE = qio
+FLASH_SPEED = 80m
+
 UPLOAD_PORT = /dev/ttyUSB0
 UPLOAD_SPEED = 460800
 
