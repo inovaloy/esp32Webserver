@@ -69,9 +69,8 @@ void webHandlerHook(webServerMacro hook)
 // POST /api/login  { "password": "..." }
 char* apiLoginHandlerHook(httpd_req_t *req) {
     char* jsonData = getContentFromReq(req);
-    if (jsonData == nullptr) return nullptr;
 
-    cJSON *json = cJSON_Parse(jsonData);
+    cJSON *json = (jsonData != nullptr) ? cJSON_Parse(jsonData) : NULL;
     cJSON *response = cJSON_CreateObject();
 
     if (json == NULL) {
