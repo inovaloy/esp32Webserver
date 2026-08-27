@@ -1,5 +1,4 @@
 #include <WiFi.h>
-#include <WebServer.h>
 #include <DNSServer.h>
 #include <EEPROM.h>
 #include "AutoGen/autoGenWebServer.h"
@@ -34,8 +33,6 @@ const IPAddress netMsk(255, 255, 255, 0);
 
 // DNS Server for captive portal
 DNSServer dnsServer;
-WebServer configServer(80);
-
 bool isAPMode = false;
 int counter = 0;
 
@@ -93,7 +90,6 @@ void loop()
 {
     if (isAPMode) {
         dnsServer.processNextRequest();
-        configServer.handleClient();
     }
 }
 
