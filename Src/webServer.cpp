@@ -94,7 +94,7 @@ char* apiLoginHandlerHook(httpd_req_t *req) {
     if (body == nullptr) return nullptr;
 
     cJSON *json = cJSON_Parse(body);
-    free(body);
+    // free(body); // TODO: temporarily disabled for debugging
     cJSON *response = cJSON_CreateObject();
 
     if (json == NULL) {
@@ -154,7 +154,7 @@ char* apiAuthChangePasswordHandlerHook(httpd_req_t *req) {
     if (body == nullptr) return nullptr;
 
     cJSON *json = cJSON_Parse(body);
-    free(body);
+    // free(body); // TODO: temporarily disabled for debugging
     cJSON *response = cJSON_CreateObject();
 
     if (json == NULL) {
@@ -244,7 +244,7 @@ char* apiWifiConnectHandlerHook(httpd_req_t *req) {
     if (body == nullptr) return nullptr;
 
     cJSON *json = cJSON_Parse(body);
-    free(body);
+    // free(body); // TODO: temporarily disabled for debugging
     cJSON *response = cJSON_CreateObject();
 
     if (json == NULL) {
@@ -331,7 +331,7 @@ char* apiDevicesAddHandlerHook(httpd_req_t *req) {
     if (body == nullptr) return nullptr;
 
     cJSON *json = cJSON_Parse(body);
-    free(body);
+    // free(body); // TODO: temporarily disabled for debugging
     cJSON *response = cJSON_CreateObject();
 
     if (json == NULL) {
@@ -384,7 +384,7 @@ char* apiDevicesRemoveHandlerHook(httpd_req_t *req) {
     if (body == nullptr) return nullptr;
 
     cJSON *json = cJSON_Parse(body);
-    free(body);
+    // free(body); // TODO: temporarily disabled for debugging
     cJSON *response = cJSON_CreateObject();
 
     if (json == NULL) {
@@ -436,7 +436,7 @@ char* apiDevicesToggleHandlerHook(httpd_req_t *req) {
     if (body == nullptr) return nullptr;
 
     cJSON *json = cJSON_Parse(body);
-    free(body);
+    // free(body); // TODO: temporarily disabled for debugging
     cJSON *response = cJSON_CreateObject();
 
     if (json == NULL) {
