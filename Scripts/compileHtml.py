@@ -148,7 +148,7 @@ const uint8_t """+arrStrName+"""[] = {
     h.close()
 
 
-def createZipFiles(enableCompression = True):
+def createZipFiles(enableCompression = True, version = "1.0.0"):
     global InfoData
     global LinkerData
     htmlFiles = os.listdir(HTML_DIR)
@@ -158,14 +158,36 @@ def createZipFiles(enableCompression = True):
     compressedHtmlDir = os.path.join(BUILD_DIR, "compressed_html")
     os.makedirs(compressedHtmlDir, exist_ok = True)
 
+    cache = loadBuildCache(BUILD_DIR)
+
     for htmlFile in htmlFiles:
         if htmlFile not in LinkerData:
             print("Skipping file:", htmlFile)
             continue
         if htmlFile.endswith(".html"):
+            srcPath = os.path.join(HTML_DIR, htmlFile)
+            zipFileName = htmlFile + ".gz"
+            zipFilePath = os.path.join(BUILD_DIR, zipFileName)
+
+            # base.html always recompiles (version string changes every run)
+            alwaysRecompile = (htmlFile == "base.html")
+
+            # Skip if source hasn't changed and the gz output already exists
+            if not alwaysRecompile and isFileUnchanged(srcPath, cache) and os.path.exists(zipFilePath):
+                print(f"File: {htmlFile:<20} unchanged — skipping")
+                # Still populate InfoData from the existing gz so readZipFile works
+                InfoData[htmlFile] = {
+                    "zipFileName": zipFileName,
+                    "compressionEnabled": enableCompression,
+                }
+                continue
+
             # Read original HTML file
-            with open(os.path.join(HTML_DIR, htmlFile), "r", encoding = 'utf-8') as fp:
+            with open(srcPath, "r", encoding = 'utf-8') as fp:
                 originalHtml = fp.read()
+
+            # Inject build version into placeholder URLs (?v=__VERSION__)
+            originalHtml = injectVersion(originalHtml, version)
 
             # Apply minification based on enableCompression flag
             if enableCompression:
@@ -175,7 +197,7 @@ def createZipFiles(enableCompression = True):
                 minifiedHtml = originalHtml
                 statusText = "Original"
 
-            # Save compressed HTML file for reference
+            # Save minified HTML file for reference
             compressedHtmlPath = os.path.join(compressedHtmlDir, htmlFile)
             with open(compressedHtmlPath, "w", encoding = 'utf-8') as fp:
                 fp.write(minifiedHtml)
@@ -184,16 +206,17 @@ def createZipFiles(enableCompression = True):
             bindata = bytearray(minifiedHtml.encode('utf-8'))
 
             # Create gzip file
-            zipFileName = htmlFile+".gz"
             InfoData[htmlFile] = {}
             InfoData[htmlFile]["zipFileName"]        = zipFileName
             InfoData[htmlFile]["originalSize"]       = len(originalHtml.encode('utf-8'))
             InfoData[htmlFile]["minifiedSize"]       = len(minifiedHtml.encode('utf-8'))
             InfoData[htmlFile]["compressionEnabled"] = enableCompression
 
-            zipFilePath = os.path.join(BUILD_DIR, zipFileName)
             with gzip.open(zipFilePath, "wb") as f:
                 f.write(bindata)
+
+            # Update cache
+            cache[srcPath] = fileHash(srcPath)
 
             # Print compression statistics
             originalSize = InfoData[htmlFile]["originalSize"]
@@ -204,6 +227,8 @@ def createZipFiles(enableCompression = True):
                 print(f"File: {htmlFile:<20} Original: {originalSize:>6} bytes, {statusText}: {minifiedSize:>6} bytes, Saved: {compressionRatio:>5.1f}%")
             else:
                 print(f"File: {htmlFile:<20} Size: {originalSize:>6} bytes (compression disabled)")
+
+    saveBuildCache(BUILD_DIR, cache)
 
 
 def readZipFile():
@@ -250,6 +275,11 @@ def readZipFile():
         autoGenInfoFile.write(json.dumps(InfoData, indent=4))
 
 
+def injectVersion(htmlContent, version):
+    """Replace __VERSION__ placeholder in HTML with the actual build version."""
+    return htmlContent.replace('__VERSION__', version)
+
+
 def main():
     # Set up argument parser
     parser = argparse.ArgumentParser(description = 'Compile HTML files to header file with optional compression')
@@ -268,8 +298,13 @@ def main():
         print("HTML/CSS/JavaScript compression: DISABLED")
     print("-" * 60)
 
+    # Bump the build version once per full autogen run (called from compileHtml first)
+    from common import getBuildVersion
+    version = getBuildVersion(bump=True)
+    print(f"Build version: {version}")
+
     readLinkerDataFile()
-    createZipFiles(enableCompression)
+    createZipFiles(enableCompression, version)
     readZipFile()
 
 

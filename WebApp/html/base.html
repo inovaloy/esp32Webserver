@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home Controller</title>
+    <!-- ?v=__VERSION__ is replaced at build time — forces cache bust on each deploy -->
+    <link rel="stylesheet" href="/Css/style.css?v=__VERSION__">
+    <script>
+        // Apply saved theme before first paint to avoid flash
+        (function(){
+            var t=localStorage.getItem('theme');
+            if(t==='dark'||(!t&&matchMedia('(prefers-color-scheme:dark)').matches)){
+                document.documentElement.setAttribute('data-theme','dark');
+            }
+        })();
+    </script>
+</head>
+<body>
+    <!-- Global alert container (sits above the shell) -->
+    <div id="alertContainer"></div>
+
+    <!-- App shell -->
+    <div class="container" id="shell">
+
+        <!-- Header — always visible -->
+        <div class="header">
+            <h1>Home Controller</h1>
+            <div class="header-right">
+                <div id="wifiStatus" class="wifi-badge">
+                    <span class="status-indicator status-connecting"></span>
+                    <span id="wifiLabel">Checking...</span>
+                </div>
+                <button class="btn-icon" id="themeToggle" title="Toggle dark/light mode">&#9790;</button>
+                <button class="btn-icon" id="logoutBtn" title="Logout">&#10226;</button>
+            </div>
+        </div>
+
+        <!-- Page content injected here by the SPA router -->
+        <div id="app">
+            <div class="loading">
+                <div class="loading-spinner"></div>
+                <div>Loading...</div>
+            </div>
+        </div>
+
+        <!-- Shell footer — always visible -->
+        <div class="footer-links" id="shellFooter" style="display:none;">
+            <a href="#dashboard" class="link-small nav-link">&#8962; Dashboard</a>
+            <span class="footer-sep">&middot;</span>
+            <a href="#wifi" class="link-small nav-link">&#9881; WiFi Settings</a>
+            <span class="footer-sep">&middot;</span>
+            <a href="#" class="link-small" id="changePwBtn">&#128274; Change Password</a>
+        </div>
+
+    </div>
+
+    <!-- Change password modal -->
+    <div id="changePwModal" class="modal-backdrop" style="display:none;">
+        <div class="modal-box">
+            <h3>Change Admin Password</h3>
+            <div id="modalAlertContainer"></div>
+            <div class="form-group">
+                <label>Current Password</label>
+                <input type="password" id="curPw" class="form-control" placeholder="Current password">
+            </div>
+            <div class="form-group">
+                <label>New Password</label>
+                <input type="password" id="newPw" class="form-control" placeholder="New password (min 6 chars)">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-primary" id="savePwBtn">Save</button>
+                <button class="btn btn-cancel" id="cancelPwBtn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/Js/app.js?v=__VERSION__"></script>
+    <script>
+        // ── Auth guard ──────────────────────────────────────────────────
+        if (!localStorage.getItem('authToken')) {
+            window.location.replace('/login');
+        }
+
+        // ── Init ────────────────────────────────────────────────────────
+        window.addEventListener('load', function () {
+            loadWifiStatus();
+            router();                 // render the current hash
+            document.getElementById('shellFooter').style.display = '';
+        });
+
+        // ── WiFi status badge ───────────────────────────────────────────
+        async function loadWifiStatus() {
+            const result = await api.getWiFiStatus();
+            const badge  = document.getElementById('wifiStatus');
+            const label  = document.getElementById('wifiLabel');
+            if (result.success && result.data.connected) {
+                badge.querySelector('.status-indicator').className = 'status-indicator status-connected';
+                label.textContent = result.data.ssid + ' \u00b7 ' + result.data.ip;
+            } else {
+                badge.querySelector('.status-indicator').className = 'status-indicator status-disconnected';
+                label.textContent = 'Not connected';
+            }
+        }
+        setInterval(loadWifiStatus, 30000);
+
+        // ── SPA Router ──────────────────────────────────────────────────
+        const PAGES = {
+            '':          '/page/dashboard',
+            'dashboard': '/page/dashboard',
+            'wifi':      '/page/wifi',
+        };
+
+        async function router() {
+            const hash = location.hash.replace('#', '') || '';
+            const fragUrl = PAGES[hash] || PAGES['dashboard'];
+            await loadFragment(fragUrl);
+            // highlight active nav link
+            document.querySelectorAll('.nav-link').forEach(a => {
+                a.classList.toggle('nav-link-active',
+                    a.getAttribute('href') === '#' + hash);
+            });
+        }
+        window.addEventListener('hashchange', router);
+
+        async function loadFragment(url) {
+            const app = document.getElementById('app');
+            app.innerHTML = '<div class="loading"><div class="loading-spinner"></div><div>Loading...</div></div>';
+            try {
+                const resp = await fetch(url);
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                app.innerHTML = await resp.text();
+                // Run any inline scripts in the fragment
+                app.querySelectorAll('script').forEach(old => {
+                    const s = document.createElement('script');
+                    s.textContent = old.textContent;
+                    old.replaceWith(s);
+                });
+            } catch (e) {
+                app.innerHTML = '<div class="alert alert-danger">Failed to load page.</div>';
+            }
+        }
+
+        // ── Logout ──────────────────────────────────────────────────────
+        document.getElementById('logoutBtn').addEventListener('click', async function () {
+            await api.logout();
+            localStorage.removeItem('authToken');
+            window.location.replace('/login');
+        });
+
+        // ── Change password modal ───────────────────────────────────────
+        document.getElementById('changePwBtn').addEventListener('click', function(e) {
+            e.preventDefault();
+            document.getElementById('changePwModal').style.display = 'flex';
+        });
+        document.getElementById('cancelPwBtn').addEventListener('click', function () {
+            document.getElementById('changePwModal').style.display = 'none';
+            document.getElementById('curPw').value = '';
+            document.getElementById('newPw').value = '';
+        });
+        document.getElementById('savePwBtn').addEventListener('click', async function () {
+            const cur = document.getElementById('curPw').value;
+            const nw  = document.getElementById('newPw').value;
+            if (!cur || !nw) {
+                Utils.showAlert('Both fields are required', 'danger', 'modalAlertContainer');
+                return;
+            }
+            this.disabled = true;
+            this.textContent = 'Saving...';
+            const result = await api.changePassword(cur, nw);
+            this.disabled = false;
+            this.textContent = 'Save';
+            if (result.success && result.data.success) {
+                document.getElementById('changePwModal').style.display = 'none';
+                localStorage.removeItem('authToken');
+                window.location.replace('/login');
+            } else {
+                Utils.showAlert(result.data?.message || 'Failed', 'danger', 'modalAlertContainer');
+            }
+        });
+    </script>
+</body>
+</html>

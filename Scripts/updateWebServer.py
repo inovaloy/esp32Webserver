@@ -6,14 +6,21 @@ Generates web server code that handles both HTML pages and static assets (CSS, J
 
 import os
 import io
+import re
 import shutil
 
 from common import *
 from utility import *
 
+# Path to the hand-written web server implementation (user edits this)
+WEB_SERVER_CPP = os.path.join("Src", "webServer.cpp")
+
 
 def createWebServerFiles():
     """Generate enhanced web server files with asset support"""
+    from common import getBuildVersion
+    version = getBuildVersion(bump=False)   # version already bumped by compileHtml
+
     linkerData = readLinkerData(LINKER_DATA_FILE)
 
     # Validate the linker data structure
@@ -56,7 +63,10 @@ def createWebServerFiles():
     generateHeaderFile(htmlPages, assets, apiEndpoints)
 
     # Generate implementation file
-    generateImplementationFile(htmlPages, assets, apiEndpoints)
+    generateImplementationFile(htmlPages, assets, apiEndpoints, version)
+
+    # Scaffold any missing hook implementations in webServer.cpp
+    scaffoldMissingHooks(htmlPages, apiEndpoints)
 
     # Copy to destination
     os.makedirs(AUTOGEN_DEST_DIR, exist_ok=True)
@@ -118,7 +128,7 @@ void webHandlerHook(webServerMacro hook);
 """)
 
 
-def generateImplementationFile(htmlPages, assets, apiEndpoints):
+def generateImplementationFile(htmlPages, assets, apiEndpoints, version="1.0.0"):
     """Generate implementation file"""
     cpp_path = os.path.join(BUILD_DIR, AUTOGEN_WEBSERVER_CPP)
 
@@ -153,7 +163,7 @@ httpd_handle_t webServerHttpd = NULL;
 
         # Generate asset handlers
         for asset in assets:
-            generateAssetHandler(cpp, asset)
+            generateAssetHandler(cpp, asset, version)
 
         # Generate API handlers
         for endpoint in apiEndpoints:
@@ -191,18 +201,19 @@ static esp_err_t {handlerName}(httpd_req_t *req){{
 """)
 
 
-def generateAssetHandler(cpp, asset):
+def generateAssetHandler(cpp, asset, version="1.0.0"):
     """Generate handler for static asset"""
     handlerName = f"{convertToCamelCase(asset['fileName'])}Handler"
     arrayName = convertToCamelCase(asset['fileName'])
     arrayLen = arrayName + "Len"
+    etag = f"v{version}"
 
     cpp.write(f"""
 static esp_err_t {handlerName}(httpd_req_t *req){{
     httpd_resp_set_type(req, "{asset['contentType']}");
     httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
-    httpd_resp_set_hdr(req, "Cache-Control", "public, max-age=31536000"); // Cache for 1 year
-    httpd_resp_set_hdr(req, "ETag", "\\"{arrayName}\\"");
+    httpd_resp_set_hdr(req, "Cache-Control", "public, max-age=31536000, immutable");
+    httpd_resp_set_hdr(req, "ETag", "\\"{etag}\\"");
     return sendLargeResponse(req, (const char *){arrayName}, {arrayLen});
 }}
 """)
@@ -339,6 +350,71 @@ void startWebServer(){
     }
 }
 """)
+
+
+def scaffoldMissingHooks(htmlPages, apiEndpoints):
+    """
+    Append stub implementations to webServer.cpp for any hook functions that
+    are declared in the generated header but not yet defined by the user.
+    Only adds stubs — never modifies existing code.
+    """
+    if not os.path.exists(WEB_SERVER_CPP):
+        print(f"Warning: {WEB_SERVER_CPP} not found, skipping hook scaffolding")
+        return
+
+    with open(WEB_SERVER_CPP, 'r', encoding='utf-8') as f:
+        existingCode = f.read()
+
+    stubs = []
+
+    # Check webHandlerHook — needs a case for every HTML page macro
+    if 'void webHandlerHook(' not in existingCode:
+        cases = '\n'.join(
+            f"    case {page['macro']}:\n        break;"
+            for page in htmlPages
+        )
+        stubs.append(f"""
+// AUTO-SCAFFOLDED: implement page-load reactions here
+void webHandlerHook(webServerMacro hook) {{
+    switch (hook) {{
+{cases}
+    default:
+        break;
+    }}
+}}
+""")
+
+    # Check each API hook
+    for endpoint in apiEndpoints:
+        funcName = getFunctionNameFromRoute(endpoint['route'])
+        hookName = f"{funcName}HandlerHook"
+        if hookName not in existingCode:
+            method = endpoint['method']
+            bodyComment = (
+                "    // TODO: read request body with getContentFromReq(req)\n"
+                "    // char* body = getContentFromReq(req);\n"
+                "    // free(body) when done\n"
+                if method == "POST" else
+                "    // TODO: build and return a JSON response\n"
+            )
+            stubs.append(f"""
+// AUTO-SCAFFOLDED: implement {endpoint['route']} ({method}) logic here
+char* {hookName}(httpd_req_t *req) {{
+{bodyComment}
+    cJSON *response = cJSON_CreateObject();
+    cJSON_AddBoolToObject(response, "success", true);
+    return cJSON_Print(response);
+}}
+""")
+
+    if stubs:
+        with open(WEB_SERVER_CPP, 'a', encoding='utf-8') as f:
+            f.write('\n// ---- AUTO-SCAFFOLDED STUBS (edit as needed) ----\n')
+            for stub in stubs:
+                f.write(stub)
+        print(f"Scaffolded {len(stubs)} missing hook(s) into {WEB_SERVER_CPP}")
+    else:
+        print("All hooks already implemented — nothing to scaffold")
 
 
 def getFunctionNameFromRoute(route):

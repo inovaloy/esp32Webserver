@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Project metadata
+# ─────────────────────────────────────────────────────────────────────────────
+[project]
+name            = "esp32-webserver-tools"
+version         = "0.1.0"
+description     = "Build scripts for the ESP32 Webserver autogen pipeline"
+requires-python = ">=3.10"
+
+# Runtime dependencies used by the build scripts
+dependencies = [
+    "PyYAML>=6.0",
+    "rjsmin>=1.2.2",
+]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Optional: dev / lint extras  (install with:  pip install -e ".[dev]")
+# ─────────────────────────────────────────────────────────────────────────────
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.4",      # linter + formatter
+    "pytest>=8",      # test runner
+]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Console entry-points — lets you run the scripts as commands once installed
+# e.g.  esp32-compile-html  instead of  python3 Scripts/compileHtml.py
+# ─────────────────────────────────────────────────────────────────────────────
+[project.scripts]
+esp32-compile-html   = "Scripts.compileHtml:main"
+esp32-compile-assets = "Scripts.compileAssets:main"
+esp32-update-server  = "Scripts.updateWebServer:main"
+esp32-autogen        = "Scripts._autogen:main"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Ruff (linter) config — applied to the Scripts/ package
+# ─────────────────────────────────────────────────────────────────────────────
+[tool.ruff]
+target-version = "py310"
+line-length    = 100
+src            = ["Scripts"]
+
+[tool.ruff.lint]
+select  = ["E", "F", "W", "I"]   # pycodestyle errors, pyflakes, imports
+ignore  = ["E501"]                # line length handled by formatter
+
+# ─────────────────────────────────────────────────────────────────────────────
+# pytest config
+# ─────────────────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]

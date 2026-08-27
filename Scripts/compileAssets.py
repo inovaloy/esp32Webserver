@@ -135,17 +135,21 @@ def compressAssets(enableCompression=True):
 
     os.makedirs(BUILD_DIR, exist_ok=True)
 
+    cache = loadBuildCache(BUILD_DIR)
+
     createHeaderFile()
 
     # Process assets referenced in linker data
     for asset in LinkerData:
         assetPath = os.path.join(ASSETS_DIR, asset['fileName'])
         if os.path.exists(assetPath):
-            processAsset(assetPath, asset['fileName'], enableCompression, asset)
+            processAsset(assetPath, asset['fileName'], enableCompression, asset, cache)
         else:
             print(f"Warning: Asset file not found: {assetPath}")
 
     closeHeaderFile()
+
+    saveBuildCache(BUILD_DIR, cache)
 
     # Copy to destination
     os.makedirs(AUTOGEN_DEST_DIR, exist_ok=True)
@@ -159,12 +163,21 @@ def compressAssets(enableCompression=True):
         f.write(json.dumps(InfoData, indent=4))
 
 
-def processAsset(filePath, fileName, enableCompression=True, assetInfo=None):
+def processAsset(filePath, fileName, enableCompression=True, assetInfo=None, cache=None):
     """Process individual asset file"""
     global InfoData
+    if cache is None:
+        cache = {}
 
     ext = os.path.splitext(fileName)[1].lower()
     contentType = SUPPORTED_ASSET_EXTENSIONS.get(ext, 'application/octet-stream')
+    arrStrName = convertToCamelCase(fileName)
+    arrStrLength = arrStrName + "Len"
+
+    # Skip if source unchanged (cache hit)
+    if isFileUnchanged(filePath, cache):
+        print(f"Processing: {fileName:<30} unchanged — skipping")
+        return
 
     print(f"Processing: {fileName}")
 
@@ -179,9 +192,6 @@ def processAsset(filePath, fileName, enableCompression=True, assetInfo=None):
     compressedData = gzip.compress(binaryData)
     compressedSize = len(compressedData)
 
-    # Generate variable names
-    arrStrName = convertToCamelCase(fileName)
-    arrStrLength = arrStrName + "Len"
     compressedName = fileName + ".gz"
 
     # Store info
@@ -200,6 +210,9 @@ def processAsset(filePath, fileName, enableCompression=True, assetInfo=None):
     # Add to header file
     updateHeaderFile(fileName, compressedName, compressedData, compressedSize,
                     arrStrName, arrStrLength, contentType)
+
+    # Update cache
+    cache[filePath] = fileHash(filePath)
 
     # Print statistics
     compressionRatio = ((originalSize - compressedSize) / originalSize) * 100 if originalSize > 0 else 0

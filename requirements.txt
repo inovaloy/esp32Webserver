@@ -1,10 +1,21 @@
-# Python dependencies for ESP32 Web Server build scripts
+# This file is kept for compatibility only.
+# pyproject.toml is now the canonical dependency definition.
 #
-# Installation (Ubuntu/Debian):
-#   sudo apt install python3-yaml
+# Quickstart — create a virtual env and install everything:
 #
-# Alternative installation methods:
-#   pip install -r requirements.txt  (if using venv)
-#   pipx install PyYAML              (isolated install)
+#   python3 -m venv .venv
+#   source .venv/bin/activate        # Windows: .venv\Scripts\activate
+#   pip install -e .                 # installs runtime deps + entry-points
+#   pip install -e ".[dev]"          # also installs ruff + pytest
+#
+# After that you can run:
+#   esp32-autogen                    # full pipeline (html + assets + server)
+#   esp32-compile-html               # html only
+#   esp32-compile-assets             # assets only
+#   esp32-update-server              # server codegen only
+#
+# Or keep using make:
+#   make autogen
 
 PyYAML>=6.0
+rjsmin>=1.2.2

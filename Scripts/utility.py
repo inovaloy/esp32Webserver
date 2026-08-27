@@ -1,6 +1,14 @@
 import re
 import yaml
 import os
+import hashlib
+import json
+
+try:
+    import rjsmin as _rjsmin
+    _HAS_RJSMIN = True
+except ImportError:
+    _HAS_RJSMIN = False
 
 from common import *
 
@@ -32,23 +40,57 @@ def minifyCss(cssContent):
 
 
 def minifyJavaScript(jsContent):
-    """Minify JavaScript by removing unnecessary whitespace and comments"""
-    # Remove single-line comments (but be careful with // in strings and URLs)
-    jsContent = re.sub(r'(?<!:)//(?!/).*?(?=\n|$)', '', jsContent)
-    # Remove multi-line comments
+    """Minify JavaScript using rjsmin if available, otherwise fall back to regex."""
+    if _HAS_RJSMIN:
+        return _rjsmin.jsmin(jsContent)
+
+    # Fallback: simple regex minifier (safe for basic scripts only)
     jsContent = re.sub(r'/\*.*?\*/', '', jsContent, flags=re.DOTALL)
-    # Remove leading and trailing whitespace from each line
+    jsContent = re.sub(r'(?<!:)//(?!/).*?(?=\n|$)', '', jsContent)
     lines = jsContent.split('\n')
     lines = [line.strip() for line in lines if line.strip()]
-    # Join lines with single space
     jsContent = ' '.join(lines)
-    # Remove excessive whitespace
     jsContent = re.sub(r'\s+', ' ', jsContent)
-    # Remove spaces around specific punctuation where it's safe
     jsContent = re.sub(r'\s*([{}();,])\s*', r'\1', jsContent)
-    jsContent = re.sub(r'\s*:\s*', r':', jsContent)
-    jsContent = re.sub(r'\s*=\s*', r'=', jsContent)
     return jsContent.strip()
+
+
+# ── Build cache helpers ──────────────────────────────────────────────────────
+
+def _cacheFilePath(buildDir):
+    return os.path.join(buildDir, "buildCache.json")
+
+
+def loadBuildCache(buildDir):
+    """Return the persisted {filepath: sha256} dict, or {} if not present."""
+    path = _cacheFilePath(buildDir)
+    if os.path.exists(path):
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
+
+
+def saveBuildCache(buildDir, cache):
+    """Persist the {filepath: sha256} dict to disk."""
+    with open(_cacheFilePath(buildDir), 'w', encoding='utf-8') as f:
+        json.dump(cache, f, indent=2)
+
+
+def fileHash(filepath):
+    """Return the SHA-256 hex digest of a file's contents."""
+    h = hashlib.sha256()
+    with open(filepath, 'rb') as f:
+        for chunk in iter(lambda: f.read(65536), b''):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def isFileUnchanged(filepath, cache):
+    """Return True if the file's hash matches the cached value."""
+    return cache.get(filepath) == fileHash(filepath)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def readLinkerData(linkerDataPath):

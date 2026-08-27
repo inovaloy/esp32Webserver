@@ -1,4 +1,31 @@
 import os
+import json
+
+# ── Build version ─────────────────────────────────────────────────────────────
+# Stored in .temp/AutoGen/version.json so it survives between runs.
+# Patch is auto-incremented every autogen run; bump MAJOR/MINOR manually.
+_VERSION_FILE = os.path.join(".temp", "AutoGen", "version.json")
+
+def _loadVersion():
+    if os.path.exists(_VERSION_FILE):
+        with open(_VERSION_FILE, 'r') as f:
+            return json.load(f)
+    return {"major": 1, "minor": 0, "patch": 0}
+
+def _saveVersion(v):
+    os.makedirs(os.path.dirname(_VERSION_FILE), exist_ok=True)
+    with open(_VERSION_FILE, 'w') as f:
+        json.dump(v, f)
+
+def getBuildVersion(bump=False):
+    """Return version string like '1.0.4'. If bump=True, increments patch first."""
+    v = _loadVersion()
+    if bump:
+        v["patch"] += 1
+        _saveVersion(v)
+    return f"{v['major']}.{v['minor']}.{v['patch']}"
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 # Configuration
 WEB_APP_DIR               = "WebApp"

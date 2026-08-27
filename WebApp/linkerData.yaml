@@ -1,18 +1,15 @@
-# HTTP Request Types - Variables for common request methods
-# Define reusable constants for HTTP methods to maintain consistency
+# HTTP Request Types
 httpMethods: &httpMethods
     GET : &httpGET  "GET"
     POST: &httpPOST "POST"
 
-# Response Types - Variables for different response content types
-# Define reusable constants for response types and MIME types
+# Response Types
 responseTypes: &responseTypes
     HTML : &rtnHTML  "HTML"
     JSON : &rtnJSON  "JSON"
     ASSET: &rtnASSET "ASSET"
 
-# Content Types - Variables for different content types
-# Define reusable constants for content types
+# Content Types
 contentTypes: &contentTypes
     CSS       : &cssType  "text/css"
     JAVASCRIPT: &jsType   "application/javascript"
@@ -21,47 +18,40 @@ contentTypes: &contentTypes
     JSON      : &jsonType "application/json"
 
 
-# HTML Pages - Web interface routes for user interaction
-# These endpoints serve static HTML pages for the ESP32 web interface
+# ── Shell page ────────────────────────────────────────────────────────────────
+# The main authenticated shell — serves base.html which contains the SPA router.
+# All app pages (dashboard, wifi config) are loaded as fragments into this shell.
 "/" :
     rtnType : *rtnHTML
-    fileName: "index.html"
-    macro   : "INDEX_HTML"
+    fileName: "base.html"
+    macro   : "BASE_HTML"
     reqType : *httpGET
 
-"/home" :
-    rtnType : *rtnHTML
-    fileName: "home.html"
-    macro   : "HOME_HTML"
-    reqType : *httpGET
-
-"/dshbrd" :
-    rtnType : *rtnHTML
-    fileName: "dashboard.html"
-    macro   : "DASHBOARD_HTML"
-    reqType : *httpGET
-
+# ── Standalone pages ──────────────────────────────────────────────────────────
+# Login has its own full page (no auth, cannot use the shell).
 "/login" :
     rtnType : *rtnHTML
     fileName: "login.html"
     macro   : "LOGIN_HTML"
     reqType : *httpGET
 
-"/logout" :
+# ── Page fragments ────────────────────────────────────────────────────────────
+# Fragments are injected into #app by the SPA router inside base.html.
+# They contain only the inner HTML for that page — no <html>/<head>/<body>.
+"/page/dashboard" :
     rtnType : *rtnHTML
-    fileName: "logout.html"
-    macro   : "LOGOUT_HTML"
+    fileName: "dashboard.html"
+    macro   : "DASHBOARD_HTML"
     reqType : *httpGET
 
-"/wifi_config" :
+"/page/wifi" :
     rtnType : *rtnHTML
     fileName: "wifi_config.html"
     macro   : "WIFI_CONFIG_HTML"
     reqType : *httpGET
 
 
-# Static Assets - CSS, JavaScript and media files
-# Frontend resources served with appropriate MIME types for web interface styling and functionality
+# ── Static Assets ─────────────────────────────────────────────────────────────
 "/Css/style.css" :
     rtnType    : *rtnASSET
     fileName   : "Css/style.css"
@@ -76,24 +66,22 @@ contentTypes: &contentTypes
     contentType: *jsType
     reqType    : *httpGET
 
-"/Image/twoFlower.jpg" :
-    rtnType    : *rtnASSET
-    fileName   : "Image/twoFlower.jpg"
-    macro      : "TWO_FLOWER_JPG"
-    contentType: *jpgType
-    reqType    : *httpGET
 
-
-# REST API Endpoints - JSON data exchange for dynamic functionality
-# Backend services for user authentication and WiFi network management
+# ── Auth API ──────────────────────────────────────────────────────────────────
 "/api/login" :
     rtnType: *rtnJSON
     reqType: *httpPOST
 
-"/api/register" :
+"/api/logout" :
     rtnType: *rtnJSON
     reqType: *httpPOST
 
+"/api/auth/change-password" :
+    rtnType: *rtnJSON
+    reqType: *httpPOST
+
+
+# ── WiFi API ──────────────────────────────────────────────────────────────────
 "/api/wifi/status" :
     rtnType: *rtnJSON
     reqType: *httpGET
@@ -103,5 +91,23 @@ contentTypes: &contentTypes
     reqType: *httpGET
 
 "/api/wifi/connect" :
+    rtnType: *rtnJSON
+    reqType: *httpPOST
+
+
+# ── Device API ────────────────────────────────────────────────────────────────
+"/api/devices" :
+    rtnType: *rtnJSON
+    reqType: *httpGET
+
+"/api/devices/add" :
+    rtnType: *rtnJSON
+    reqType: *httpPOST
+
+"/api/devices/remove" :
+    rtnType: *rtnJSON
+    reqType: *httpPOST
+
+"/api/devices/toggle" :
     rtnType: *rtnJSON
     reqType: *httpPOST
