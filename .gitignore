@@ -3,5 +3,5 @@
 build/
 Src/AutoGen/
 Scripts/__pycache__/
-.venv
-*.egg-info
+.venv/
+*.egg-info/
