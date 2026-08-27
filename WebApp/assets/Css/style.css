@@ -389,6 +389,7 @@ a:hover { text-decoration: underline; }
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    transition: color 0.2s;
 }
 .device-card.device-on .device-name { color: var(--green); }
 

@@ -98,13 +98,18 @@
     }
 
     async function toggleDevice(index, state) {
+        // Optimistic UI: apply the new state immediately so the card
+        // background and name colour change in sync with the toggle knob.
+        const card = document.getElementById('card-' + index);
+        if (card) card.classList.toggle('device-on', state);
+
         const result = await api.toggleDevice(index, state);
-        if (result.success && result.data.success) {
-            const card = document.getElementById('card-' + index);
-            if (card) card.classList.toggle('device-on', state);
-        } else {
+        if (!result.success || !result.data.success) {
+            // Revert the optimistic update on failure
+            if (card) card.classList.toggle('device-on', !state);
+            const cb = card && card.querySelector('input[type="checkbox"]');
+            if (cb) cb.checked = !state;
             Utils.showAlert('Failed to toggle device', 'danger');
-            renderDevices();
         }
     }
 

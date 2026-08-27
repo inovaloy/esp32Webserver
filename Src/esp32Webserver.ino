@@ -44,6 +44,7 @@ bool isAPMode = false;
 int counter = 0;
 volatile bool rebootScheduled = false;
 unsigned long rebootAt = 0;
+volatile bool eepromDirty = false;   // set by httpd task; committed + rebooted in loop()
 
 // Function declarations
 bool eepromIsValid();
@@ -124,7 +125,13 @@ void loop()
     if (isAPMode) {
         dnsServer.processNextRequest();
     }
+    // Flush any pending EEPROM write from the httpd task first, then reboot
     if (rebootScheduled && millis() >= rebootAt) {
+        if (eepromDirty) {
+            EEPROM.commit();
+            eepromDirty = false;
+            delay(50);   // let NVS finish writing before reset
+        }
         Serial.println("Rebooting...");
         ESP.restart();
     }
@@ -292,7 +299,10 @@ void saveDevicesToEEPROM() {
         EEPROM.write(base + DEVICE_NAME_LEN + 1, devices[i].state);
     }
     EEPROM.write(EEPROM_MAGIC_ADDR, EEPROM_MAGIC_BYTE);
+    // Commit from the httpd task — mark dirty so loop() can do a second
+    // commit just before ESP.restart() to guarantee the write completed.
     EEPROM.commit();
+    eepromDirty = true;
 }
 
 void updateOledDeviceStatus() {
