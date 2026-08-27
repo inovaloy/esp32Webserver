@@ -2,9 +2,7 @@
 #include <DNSServer.h>
 #include <EEPROM.h>
 #include "AutoGen/autoGenWebServer.h"
-// #include "httpClient.h"
-// #include "sd_card.h"
-// #include "LiquidCrystal_I2C.h"
+#include "deviceConfig.h"
 #include <SPI.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
@@ -18,16 +16,25 @@
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // WiFi Configuration
-#define WIFI_TIMEOUT 20000  // 20 seconds timeout for WiFi connection
+#define WIFI_TIMEOUT 20000
 #define EEPROM_SIZE 512
 #define SSID_ADDR 0
 #define PASS_ADDR 100
 #define MAX_SSID_LENGTH 32
 #define MAX_PASS_LENGTH 64
+#define EEPROM_MAGIC_ADDR 200
+#define EEPROM_MAGIC_BYTE 0xA5
 
-// AP Configuration
-const char* ap_ssid = "ESP32-Setup";
-const char* ap_password = "12345678";
+// Runtime device list (loaded from EEPROM at boot)
+Device  devices[MAX_DEVICES];
+uint8_t deviceCount = 0;
+
+// Admin password buffer
+char adminPassword[ADMIN_PASS_LEN + 1];
+
+// AP credentials — derived from MAC at runtime
+char ap_ssid[32];
+char ap_password[16];
 const IPAddress apIP(192, 168, 4, 1);
 const IPAddress netMsk(255, 255, 255, 0);
 
@@ -37,13 +44,18 @@ bool isAPMode = false;
 int counter = 0;
 
 // Function declarations
+bool eepromIsValid();
 bool connectToWiFi();
 void displayWiFiInfo();
 void startAPMode();
-void setupConfigServer();
-String getConfigPage();
 String readStringFromEEPROM(int addr, int maxLength);
 void writeStringToEEPROM(int addr, String data, int maxLength);
+void loadDevicesFromEEPROM();
+void saveDevicesToEEPROM();
+void updateOledDeviceStatus();
+void loadAdminPasswordFromEEPROM();
+void saveAdminPassword(const char* newPassword);
+bool checkAdminPassword(const char* attempt);
 
 void setup()
 {
@@ -51,6 +63,18 @@ void setup()
 
     Serial.begin(115200);
     Serial.println();
+
+    // Derive AP credentials from the factory eFuse MAC — safe before WiFi init
+    uint64_t chipId = ESP.getEfuseMac();
+    uint8_t mac[6];
+    mac[0] = (chipId >> 40) & 0xFF;
+    mac[1] = (chipId >> 32) & 0xFF;
+    mac[2] = (chipId >> 24) & 0xFF;
+    mac[3] = (chipId >> 16) & 0xFF;
+    mac[4] = (chipId >>  8) & 0xFF;
+    mac[5] = (chipId >>  0) & 0xFF;
+    snprintf(ap_ssid,     sizeof(ap_ssid),     "ESP32-%02X%02X",     mac[4], mac[5]);
+    snprintf(ap_password, sizeof(ap_password), "%02X%02X%02X%02X", mac[2], mac[3], mac[4], mac[5]);
 
     // Initialize EEPROM
     EEPROM.begin(EEPROM_SIZE);
@@ -75,6 +99,12 @@ void setup()
     display.display();
     delay(2000);
 
+    // Load saved admin password (or set MAC-derived default on first boot)
+    loadAdminPasswordFromEEPROM();
+
+    // Load saved devices and restore GPIO states
+    loadDevicesFromEEPROM();
+
     // Try to connect to saved WiFi credentials
     if (connectToWiFi()) {
         Serial.println("Connected to WiFi successfully!");
@@ -93,8 +123,14 @@ void loop()
     }
 }
 
+// Returns true if EEPROM has been written by this firmware at least once
+bool eepromIsValid() {
+    return EEPROM.read(EEPROM_MAGIC_ADDR) == EEPROM_MAGIC_BYTE;
+}
+
 // Function to read WiFi credentials from EEPROM
 String readStringFromEEPROM(int addr, int maxLength) {
+    if (!eepromIsValid()) return "";
     String data = "";
     char c;
     for (int i = 0; i < maxLength; i++) {
@@ -115,6 +151,7 @@ void writeStringToEEPROM(int addr, String data, int maxLength) {
             break;
         }
     }
+    EEPROM.write(EEPROM_MAGIC_ADDR, EEPROM_MAGIC_BYTE);
     EEPROM.commit();
 }
 
@@ -130,10 +167,11 @@ bool connectToWiFi() {
     String ssid = readStringFromEEPROM(SSID_ADDR, MAX_SSID_LENGTH);
     String password = readStringFromEEPROM(PASS_ADDR, MAX_PASS_LENGTH);
 
-    // If no saved credentials, try default ones first
-    if (ssid.length() != 0) {
-        Serial.printf("Trying saved WiFi: %s\n", ssid.c_str());
+    if (ssid.length() == 0) {
+        Serial.println("No saved WiFi credentials.");
+        return false;
     }
+    Serial.printf("Trying saved WiFi: %s\n", ssid.c_str());
 
     display.clearDisplay();
     display.setCursor(0, 0);
@@ -154,13 +192,7 @@ bool connectToWiFi() {
     }
 
     if (WiFi.status() == WL_CONNECTED) {
-        // If connection successful and using default credentials, save them
-        if (readStringFromEEPROM(SSID_ADDR, MAX_SSID_LENGTH).length() == 0) {
-            writeStringToEEPROM(SSID_ADDR, ssid, MAX_SSID_LENGTH);
-            writeStringToEEPROM(PASS_ADDR, password, MAX_PASS_LENGTH);
-            Serial.println("Default credentials saved to EEPROM");
-        }
-        digitalWrite(33, HIGH); // Turn on LED to indicate connection
+        digitalWrite(33, HIGH);
         return true;
     } else {
         digitalWrite(33, LOW); // Turn off LED
@@ -183,6 +215,8 @@ void displayWiFiInfo() {
     display.printf("IP: %s\n", WiFi.localIP().toString().c_str());
     display.printf("SSID: %s\n", WiFi.SSID().c_str());
     display.display();
+    delay(2000);
+    updateOledDeviceStatus();
 }
 
 // Function to start AP mode with captive portal
@@ -209,4 +243,107 @@ void startAPMode() {
 
     Serial.printf("AP IP address: %s\n", WiFi.softAPIP().toString().c_str());
     Serial.println("Connect to the AP and navigate to 192.168.4.1 to configure WiFi");
+}
+
+// ── EEPROM: devices ───────────────────────────────────────────────────────
+
+void loadDevicesFromEEPROM() {
+    if (!eepromIsValid()) { deviceCount = 0; return; }
+    deviceCount = EEPROM.read(DEVICE_COUNT_ADDR);
+    if (deviceCount > MAX_DEVICES) deviceCount = 0;
+    for (uint8_t i = 0; i < deviceCount; i++) {
+        int base = DEVICE_BASE_ADDR + i * DEVICE_SLOT_SIZE;
+        for (int j = 0; j < DEVICE_NAME_LEN; j++)
+            devices[i].name[j] = EEPROM.read(base + j);
+        devices[i].name[DEVICE_NAME_LEN - 1] = '\0';
+        devices[i].pin   = EEPROM.read(base + DEVICE_NAME_LEN);
+        devices[i].state = EEPROM.read(base + DEVICE_NAME_LEN + 1);
+        pinMode(devices[i].pin, OUTPUT);
+        digitalWrite(devices[i].pin, devices[i].state ? HIGH : LOW);
+        Serial.printf("Loaded device[%d]: %s pin=%d state=%d\n",
+                      i, devices[i].name, devices[i].pin, devices[i].state);
+    }
+}
+
+void saveDevicesToEEPROM() {
+    EEPROM.write(DEVICE_COUNT_ADDR, deviceCount);
+    for (uint8_t i = 0; i < deviceCount; i++) {
+        int base = DEVICE_BASE_ADDR + i * DEVICE_SLOT_SIZE;
+        for (int j = 0; j < DEVICE_NAME_LEN; j++)
+            EEPROM.write(base + j, devices[i].name[j]);
+        EEPROM.write(base + DEVICE_NAME_LEN,     devices[i].pin);
+        EEPROM.write(base + DEVICE_NAME_LEN + 1, devices[i].state);
+    }
+    EEPROM.write(EEPROM_MAGIC_ADDR, EEPROM_MAGIC_BYTE);
+    EEPROM.commit();
+}
+
+void updateOledDeviceStatus() {
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.setCursor(0, 0);
+    display.println("Home Controller");
+    display.setCursor(0, 10);
+    if (WiFi.status() == WL_CONNECTED)
+        display.printf("WiFi: %s", WiFi.SSID().c_str());
+    else
+        display.printf("AP: %s", ap_ssid);
+    display.drawLine(0, 20, 127, 20, WHITE);
+    uint8_t shown = deviceCount < 6 ? deviceCount : 6;
+    for (uint8_t i = 0; i < shown; i++) {
+        display.setCursor(0, 23 + i * 8);
+        char truncated[11];
+        strncpy(truncated, devices[i].name, 10);
+        truncated[10] = '\0';
+        display.printf("%-10s %s", truncated, devices[i].state ? "ON " : "OFF");
+    }
+    if (deviceCount == 0) {
+        display.setCursor(0, 30);
+        display.println("No devices added");
+    }
+    display.display();
+}
+
+// ── EEPROM: admin password ────────────────────────────────────────────────
+
+void loadAdminPasswordFromEEPROM() {
+    if (eepromIsValid()) {
+        for (int i = 0; i < ADMIN_PASS_LEN; i++)
+            adminPassword[i] = (char)EEPROM.read(ADMIN_PASS_ADDR + i);
+        adminPassword[ADMIN_PASS_LEN] = '\0';
+        if (adminPassword[0] != '\0') {
+            Serial.println("Admin password loaded from EEPROM");
+            return;
+        }
+    }
+    // First boot — derive default from MAC
+    uint64_t chipId = ESP.getEfuseMac();
+    uint8_t mac[6];
+    mac[0] = (chipId >> 40) & 0xFF;
+    mac[1] = (chipId >> 32) & 0xFF;
+    mac[2] = (chipId >> 24) & 0xFF;
+    mac[3] = (chipId >> 16) & 0xFF;
+    mac[4] = (chipId >>  8) & 0xFF;
+    mac[5] = (chipId >>  0) & 0xFF;
+    snprintf(adminPassword, sizeof(adminPassword),
+             "%02X%02X%02X%02X", mac[2], mac[3], mac[4], mac[5]);
+    saveAdminPassword(adminPassword);
+    Serial.printf("Default admin password set from MAC: %s\n", adminPassword);
+}
+
+void saveAdminPassword(const char* newPassword) {
+    strncpy(adminPassword, newPassword, ADMIN_PASS_LEN);
+    adminPassword[ADMIN_PASS_LEN] = '\0';
+    for (int i = 0; i < ADMIN_PASS_LEN; i++)
+        EEPROM.write(ADMIN_PASS_ADDR + i, (uint8_t)adminPassword[i]);
+    EEPROM.write(EEPROM_MAGIC_ADDR, EEPROM_MAGIC_BYTE);
+    EEPROM.commit();
+}
+
+bool checkAdminPassword(const char* attempt) {
+    uint8_t diff = 0;
+    for (int i = 0; i < ADMIN_PASS_LEN; i++)
+        diff |= (uint8_t)adminPassword[i] ^ (uint8_t)attempt[i];
+    return diff == 0;
 }
