@@ -25,7 +25,7 @@ contentTypes: &contentTypes
 # These endpoints serve static HTML pages for the ESP32 web interface
 "/" :
     rtnType : *rtnHTML
-    fileName: "index.html"
+    fileName: "base.html"
     macro   : "BASE_HTML"
     reqType : *httpGET
 

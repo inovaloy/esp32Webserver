@@ -5,17 +5,26 @@ class ESP32WebAPI {
         this.baseUrl = baseUrl;
     }
 
-    async request(endpoint, options = {}) {
-        const defaultOptions = {
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        };
+    // Returns the stored auth token, or null
+    _token() {
+        return localStorage.getItem('authToken');
+    }
 
-        const config = { ...defaultOptions, ...options };
+    async request(endpoint, options = {}) {
+        const headers = { 'Content-Type': 'application/json' };
+        const token = this._token();
+        if (token) headers['X-Auth-Token'] = token;
+
+        const config = { headers, ...options };
 
         try {
             const response = await fetch(this.baseUrl + endpoint, config);
+            // Unauthorised — wipe token and redirect to login (except on login page itself)
+            if (response.status === 401 && !window.location.pathname.startsWith('/login')) {
+                localStorage.removeItem('authToken');
+                window.location.replace('/login');
+                return { success: false, error: 'Unauthorized' };
+            }
             const data = await response.json();
             return { success: true, data };
         } catch (error) {
@@ -35,6 +44,19 @@ class ESP32WebAPI {
         });
     }
 
+    // Auth API methods
+    async login(password) {
+        return this.post('/api/login', { password });
+    }
+
+    async logout() {
+        return this.post('/api/logout', {});
+    }
+
+    async changePassword(current, newPassword) {
+        return this.post('/api/auth/change-password', { current, 'new': newPassword });
+    }
+
     // WiFi API methods
     async getWiFiStatus() {
         return this.get('/api/wifi/status');
@@ -48,13 +70,21 @@ class ESP32WebAPI {
         return this.post('/api/wifi/connect', { ssid, password });
     }
 
-    // Auth API methods
-    async login(username, password) {
-        return this.post('/api/login', { username, password });
+    // Device API methods
+    async getDevices() {
+        return this.get('/api/devices');
     }
 
-    async register(username, password, email) {
-        return this.post('/api/register', { username, password, email });
+    async addDevice(name, pin) {
+        return this.post('/api/devices/add', { name, pin });
+    }
+
+    async toggleDevice(index, state) {
+        return this.post('/api/devices/toggle', { index, state });
+    }
+
+    async removeDevice(index) {
+        return this.post('/api/devices/remove', { index });
     }
 }
 
@@ -326,6 +356,7 @@ function updateWiFiStatusDisplay(status) {
 // Start monitoring when page loads
 document.addEventListener('DOMContentLoaded', function() {
     startStatusMonitoring();
+    initThemeToggle();
 });
 
 // Clean up interval when page unloads
@@ -334,3 +365,27 @@ window.addEventListener('beforeunload', function() {
         clearInterval(statusInterval);
     }
 });
+
+// ── Dark / light mode toggle ──────────────────────────────────────────────
+function initThemeToggle() {
+    const btn = document.getElementById('themeToggle');
+    if (!btn) return;
+
+    function applyTheme(dark) {
+        if (dark) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        } else {
+            document.documentElement.removeAttribute('data-theme');
+        }
+        btn.textContent = dark ? '\u2600' : '\u263D'; // ☀ / ☽
+    }
+
+    // Initialise icon from current state
+    applyTheme(document.documentElement.getAttribute('data-theme') === 'dark');
+
+    btn.addEventListener('click', function () {
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        localStorage.setItem('theme', isDark ? 'light' : 'dark');
+        applyTheme(!isDark);
+    });
+}
