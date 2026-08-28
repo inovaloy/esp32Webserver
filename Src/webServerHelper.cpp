@@ -22,23 +22,27 @@ esp_err_t sendLargeResponse(httpd_req_t *req, const char* data, size_t dataLen) 
 
 
 char* getContentFromReq(httpd_req_t *req) {
-    char* buf = nullptr;
     size_t buf_len = req->content_len;
+    if (buf_len == 0) return nullptr;
 
-    if (buf_len > 0) {
-        buf = (char*)malloc(buf_len + 1);
-        if (buf == nullptr) {
-            Serial.println("Failed to allocate memory for request content");
-            return nullptr;
-        }
+    char* buf = (char*)malloc(buf_len + 1);
+    if (buf == nullptr) {
+        Serial.println("[HTTP] malloc failed for request body");
+        return nullptr;
+    }
 
-        int ret = httpd_req_recv(req, buf, buf_len);
+    // httpd_req_recv may return fewer bytes than requested (TCP segmentation).
+    // Loop until the full body is received.
+    size_t received = 0;
+    while (received < buf_len) {
+        int ret = httpd_req_recv(req, buf + received, buf_len - received);
         if (ret <= 0) {
-            Serial.println("Failed to receive request content");
+            Serial.printf("[HTTP] recv failed: ret=%d received=%d/%d\n", ret, received, buf_len);
             free(buf);
             return nullptr;
         }
-        buf[buf_len] = '\0'; // Null-terminate the string
+        received += ret;
     }
+    buf[buf_len] = '\0';
     return buf;
 }

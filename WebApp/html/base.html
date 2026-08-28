@@ -128,7 +128,7 @@
         </div>
     </div>
 
-    <script src="/Js/app.js?v=5"></script>
+    <script src="/Js/app.js?v=7"></script>
     <script>
         if (!localStorage.getItem('authToken')) {
             window.location.replace('/login');
@@ -142,10 +142,12 @@
 
         // ── WiFi status ─────────────────────────────────────────────
         async function loadWifiStatus() {
+            const badge = document.getElementById('wifiStatus');
+            const label = document.getElementById('wifiLabel');
+            if (!badge || !label) return;
             const result = await api.getWiFiStatus();
-            const badge  = document.getElementById('wifiStatus');
-            const label  = document.getElementById('wifiLabel');
-            if (result.success && result.data.connected) {
+            if (!result.success) return;
+            if (result.data.connected) {
                 badge.querySelector('.status-indicator').className = 'status-indicator status-connected';
                 label.textContent = result.data.ssid + ' \u00b7 ' + result.data.ip;
             } else {

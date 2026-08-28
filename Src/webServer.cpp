@@ -75,6 +75,7 @@ char* apiLoginHandlerHook(httpd_req_t *req) {
                   req->content_len, jsonData ? jsonData : "(null)");
 
     cJSON *json = (jsonData != nullptr) ? cJSON_Parse(jsonData) : NULL;
+    free(jsonData);
     cJSON *response = cJSON_CreateObject();
 
     if (json == NULL) {
@@ -83,10 +84,6 @@ char* apiLoginHandlerHook(httpd_req_t *req) {
     } else {
         cJSON *pass_j = cJSON_GetObjectItem(json, "password");
         if (!cJSON_IsString(pass_j)) {
-            Serial.printf("[LOGIN] keys in json: ");
-            cJSON *item = json->child;
-            while (item) { Serial.printf("%s ", item->string); item = item->next; }
-            Serial.println();
             cJSON_AddBoolToObject(response, "success", false);
             cJSON_AddStringToObject(response, "message", "password field required");
         } else {
@@ -130,6 +127,7 @@ char* apiAuthChangePasswordHandlerHook(httpd_req_t *req) {
     if (jsonData == nullptr) return nullptr;
 
     cJSON *json = cJSON_Parse(jsonData);
+    free(jsonData);
     cJSON *response = cJSON_CreateObject();
 
     if (json == NULL) {
@@ -210,6 +208,7 @@ char* apiWifiConnectHandlerHook(httpd_req_t *req) {
     if (jsonData == nullptr) return nullptr;
 
     cJSON *json = cJSON_Parse(jsonData);
+    free(jsonData);
     cJSON *response = cJSON_CreateObject();
 
     if (json == NULL) {
@@ -324,6 +323,7 @@ char* apiDevicesAddHandlerHook(httpd_req_t *req) {
     if (jsonData == nullptr) return nullptr;
 
     cJSON *json = cJSON_Parse(jsonData);
+    free(jsonData);
     cJSON *response = cJSON_CreateObject();
 
     if (json == NULL) {
@@ -370,6 +370,7 @@ char* apiDevicesRemoveHandlerHook(httpd_req_t *req) {
     if (jsonData == nullptr) return nullptr;
 
     cJSON *json = cJSON_Parse(jsonData);
+    free(jsonData);
     cJSON *response = cJSON_CreateObject();
 
     if (json == NULL) {
@@ -412,6 +413,7 @@ char* apiDevicesToggleHandlerHook(httpd_req_t *req) {
     if (jsonData == nullptr) return nullptr;
 
     cJSON *json = cJSON_Parse(jsonData);
+    free(jsonData);
     cJSON *response = cJSON_CreateObject();
 
     if (json == NULL) {
