@@ -410,6 +410,8 @@ char* apiDevicesToggleHandlerHook(httpd_req_t *req) {
     if (!isAuthorised(req)) { sendUnauthorised(req); return nullptr; }
 
     char* jsonData = getContentFromReq(req);
+    Serial.printf("[TOGGLE] content_len=%d body=%s\n",
+                  req->content_len, jsonData ? jsonData : "(null — getContentFromReq failed)");
     if (jsonData == nullptr) return nullptr;
 
     cJSON *json = cJSON_Parse(jsonData);
@@ -417,15 +419,20 @@ char* apiDevicesToggleHandlerHook(httpd_req_t *req) {
     cJSON *response = cJSON_CreateObject();
 
     if (json == NULL) {
+        Serial.println("[TOGGLE] cJSON_Parse failed — bad JSON");
         cJSON_AddBoolToObject(response, "success", false);
         cJSON_AddStringToObject(response, "message", "Invalid JSON");
     } else {
         cJSON *idx_j   = cJSON_GetObjectItem(json, "index");
         cJSON *state_j = cJSON_GetObjectItem(json, "state");
+        Serial.printf("[TOGGLE] idx_j=%s state_j=%s\n",
+                      cJSON_IsNumber(idx_j) ? "num" : "bad",
+                      cJSON_IsBool(state_j) ? "bool" : cJSON_IsNumber(state_j) ? "num" : "bad");
         if (cJSON_IsNumber(idx_j) && (cJSON_IsBool(state_j) || cJSON_IsNumber(state_j))) {
             int idx   = (int)idx_j->valuedouble;
             int state = cJSON_IsTrue(state_j) ? 1 : 0;
             if (idx < 0 || idx >= (int)deviceCount) {
+                Serial.printf("[TOGGLE] index %d out of range (deviceCount=%d)\n", idx, deviceCount);
                 cJSON_AddBoolToObject(response, "success", false);
                 cJSON_AddStringToObject(response, "message", "Index out of range");
             } else {
@@ -433,12 +440,14 @@ char* apiDevicesToggleHandlerHook(httpd_req_t *req) {
                 digitalWrite(devices[idx].pin, state ? HIGH : LOW);
                 saveDevicesToEEPROM();
                 updateOledDeviceStatus();
-                Serial.printf("Device[%d] '%s' -> %s\n", idx, devices[idx].name, state ? "ON" : "OFF");
+                Serial.printf("[TOGGLE] Device[%d] '%s' -> %s  (deviceCount=%d)\n",
+                              idx, devices[idx].name, state ? "ON" : "OFF", deviceCount);
                 cJSON_AddBoolToObject(response, "success", true);
                 cJSON_AddNumberToObject(response, "index", idx);
                 cJSON_AddBoolToObject(response, "state", state == 1);
             }
         } else {
+            Serial.println("[TOGGLE] field type mismatch — rejecting");
             cJSON_AddBoolToObject(response, "success", false);
             cJSON_AddStringToObject(response, "message", "index (number) and state (bool) required");
         }
