@@ -37,7 +37,7 @@ char* getContentFromReq(httpd_req_t *req) {
     while (received < buf_len) {
         int ret = httpd_req_recv(req, buf + received, buf_len - received);
         if (ret <= 0) {
-            Serial.printf("[HTTP] recv failed: ret=%d received=%d/%d\n", ret, received, buf_len);
+            Serial.printf("[HTTP] recv failed: ret=%d received=%d/%d\r\n", ret, received, buf_len);
             free(buf);
             return nullptr;
         }

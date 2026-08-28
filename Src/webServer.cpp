@@ -429,7 +429,7 @@ char* apiDevicesToggleHandlerHook(httpd_req_t *req) {
                 digitalWrite(devices[idx].pin, state ? HIGH : LOW);
                 saveDevicesToEEPROM();
                 updateOledDeviceStatus();
-                Serial.printf("Device[%d] '%s' -> %s\n", idx, devices[idx].name, state ? "ON" : "OFF");
+                Serial.printf("Device[%d] '%s' -> %s\r\n", idx, devices[idx].name, state ? "ON" : "OFF");
                 cJSON_AddBoolToObject(response, "success", true);
                 cJSON_AddNumberToObject(response, "index", idx);
                 cJSON_AddBoolToObject(response, "state", state == 1);

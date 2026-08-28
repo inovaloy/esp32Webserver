@@ -191,7 +191,7 @@ bool connectToWiFi() {
         Serial.println("No saved WiFi credentials.");
         return false;
     }
-    Serial.printf("Trying saved WiFi: %s\n", ssid.c_str());
+    Serial.printf("Trying saved WiFi: %s\r\n", ssid.c_str());
 
     display.clearDisplay();
     display.setCursor(0, 0);
@@ -210,6 +210,7 @@ bool connectToWiFi() {
         ledStatus = !ledStatus;
         digitalWrite(33, ledStatus);
     }
+    Serial.println();
 
     if (WiFi.status() == WL_CONNECTED) {
         digitalWrite(33, HIGH);
@@ -252,7 +253,7 @@ void startAPMode() {
     display.printf("IP: %s\n", apIP.toString().c_str());
     display.display();
 
-    Serial.printf("Starting AP Mode - SSID: %s, Password: %s\n", ap_ssid, ap_password);
+    Serial.printf("Starting AP Mode - SSID: %s, Password: %s\r\n", ap_ssid, ap_password);
 
     WiFi.mode(WIFI_AP);
     WiFi.softAPConfig(apIP, apIP, netMsk);
@@ -261,21 +262,21 @@ void startAPMode() {
     // Start DNS server for captive portal
     dnsServer.start(53, "*", apIP);
 
-    Serial.printf("AP IP address: %s\n", WiFi.softAPIP().toString().c_str());
+    Serial.printf("AP IP address: %s\r\n", WiFi.softAPIP().toString().c_str());
     Serial.println("Connect to the AP and navigate to 192.168.4.1 to configure WiFi");
 }
 
 // ── EEPROM: devices ───────────────────────────────────────────────────────
 
 void loadDevicesFromEEPROM() {
-    Serial.printf("[EEPROM] magic=0x%02X count_addr=%d count=0x%02X\n",
+    Serial.printf("[EEPROM] magic=0x%02X count_addr=%d count=0x%02X\r\n",
                   EEPROM.read(EEPROM_MAGIC_ADDR),
                   DEVICE_COUNT_ADDR,
                   EEPROM.read(DEVICE_COUNT_ADDR));
 
     if (!eepromIsValid()) { deviceCount = 0; Serial.println("[EEPROM] invalid magic — skipping device load"); return; }
     deviceCount = EEPROM.read(DEVICE_COUNT_ADDR);
-    if (deviceCount > MAX_DEVICES) { Serial.printf("[EEPROM] count %d > max %d — reset\n", deviceCount, MAX_DEVICES); deviceCount = 0; }
+    if (deviceCount > MAX_DEVICES) { Serial.printf("[EEPROM] count %d > max %d — reset\r\n", deviceCount, MAX_DEVICES); deviceCount = 0; }
     for (uint8_t i = 0; i < deviceCount; i++) {
         int base = DEVICE_BASE_ADDR + i * DEVICE_SLOT_SIZE;
         for (int j = 0; j < DEVICE_NAME_LEN; j++)
@@ -285,7 +286,7 @@ void loadDevicesFromEEPROM() {
         devices[i].state = EEPROM.read(base + DEVICE_NAME_LEN + 1);
         pinMode(devices[i].pin, OUTPUT);
         digitalWrite(devices[i].pin, devices[i].state ? HIGH : LOW);
-        Serial.printf("[EEPROM] device[%d]: name=%s pin=%d state=%d\n",
+        Serial.printf("[EEPROM] device[%d]: name=%s pin=%d state=%d\r\n",
                       i, devices[i].name, devices[i].pin, devices[i].state);
     }
 }
@@ -358,7 +359,7 @@ void loadAdminPasswordFromEEPROM() {
     snprintf(adminPassword, sizeof(adminPassword),
              "%02X%02X%02X%02X", mac[2], mac[3], mac[4], mac[5]);
     saveAdminPassword(adminPassword);
-    Serial.printf("Default admin password set from MAC: %s\n", adminPassword);
+    Serial.printf("Default admin password set from MAC: %s\r\n", adminPassword);
 }
 
 void saveAdminPassword(const char* newPassword) {
