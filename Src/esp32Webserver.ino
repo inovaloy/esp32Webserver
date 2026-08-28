@@ -131,7 +131,6 @@ void loop()
     if (eepromDirty) {
         EEPROM.commit();
         eepromDirty = false;
-        Serial.println("[EEPROM] committed from main task");
     }
     if (rebootScheduled && millis() >= rebootAt) {
         Serial.println("Rebooting...");
