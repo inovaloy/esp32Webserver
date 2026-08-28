@@ -250,9 +250,25 @@
             this.textContent = 'Rebooting...';
             await api.reboot();
             document.getElementById('rebootModal').style.display = 'none';
-            Utils.showAlert('Device is rebooting. Reconnect in a few seconds.', 'info');
-            this.disabled = false;
-            this.textContent = 'Reboot';
+            // Clear the local session immediately — the ESP32 reboot destroys
+            // the in-RAM token, so any stored token is now invalid.
+            localStorage.removeItem('authToken');
+            // Show a countdown alert then redirect to login
+            let secs = 8;
+            const alertContainer = document.getElementById('alertContainer');
+            const div = document.createElement('div');
+            div.className = 'alert alert-info';
+            div.textContent = 'Device is rebooting. Redirecting to login in ' + secs + 's...';
+            alertContainer.appendChild(div);
+            const iv = setInterval(function() {
+                secs--;
+                if (secs <= 0) {
+                    clearInterval(iv);
+                    window.location.replace('/login');
+                } else {
+                    div.textContent = 'Device is rebooting. Redirecting to login in ' + secs + 's...';
+                }
+            }, 1000);
         });
 
         // ── Change password ─────────────────────────────────────────
