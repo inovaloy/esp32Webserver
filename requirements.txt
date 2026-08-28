@@ -1,10 +1,8 @@
 # Python dependencies for ESP32 Web Server build scripts
 #
-# Installation (Ubuntu/Debian):
-#   sudo apt install python3-yaml
-#
-# Alternative installation methods:
-#   pip install -r requirements.txt  (if using venv)
-#   pipx install PyYAML              (isolated install)
+# Install:
+#   pip install -r requirements.txt
 
 PyYAML>=6.0
+rjsmin>=1.2.0
+rcssmin>=1.2.0

@@ -87,8 +87,7 @@
                 </div>
                 <div class="device-controls">
                     <label class="toggle-switch">
-                        <input type="checkbox" ${d.state ? 'checked' : ''}
-                               onchange="toggleDevice(${d.index}, this.checked)">
+                        <input type="checkbox" ${d.state ? 'checked' : ''} onchange="toggleDevice(${d.index}, this.checked)">
                         <span class="toggle-slider"></span>
                     </label>
                     <button class="btn-remove" onclick="removeDevice(${d.index})" title="Remove">&#10005;</button>
