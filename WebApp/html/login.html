@@ -4,13 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Home Controller — Login</title>
-    <link rel="stylesheet" href="/Css/style.css?v=6">
+    <link rel="stylesheet" href="/Css/style.css?v=7">
     <script>
         (function(){
             var t = localStorage.getItem('theme');
-            if (t === 'dark' || (!t && matchMedia('(prefers-color-scheme:dark)').matches)) {
-                document.documentElement.setAttribute('data-theme','dark');
-            }
+            var dark = t === 'dark' || (!t && matchMedia('(prefers-color-scheme:dark)').matches);
+            document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
         })();
     </script>
 </head>
@@ -38,8 +37,16 @@
         </p>
     </div>
 
-    <script src="/Js/app.js?v=7"></script>
+    <script src="/Js/app.js?v=10"></script>
     <script>
+        const themeToggle = document.getElementById('themeToggle');
+        themeToggle.addEventListener('click', function() {
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            localStorage.setItem('theme', isDark ? 'light' : 'dark');
+            document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+            this.textContent = isDark ? '\u263D' : '\u2600';
+        });
+
         // If already authenticated, go straight to dashboard
         if (localStorage.getItem('authToken')) {
             window.location.replace('/');
@@ -67,6 +74,7 @@
 
             if (result.success && result.data && result.data.success) {
                 localStorage.setItem('authToken', result.data.token);
+                localStorage.setItem('lastActivity', String(Date.now()));
                 window.location.replace('/');
             } else {
                 const msg = (result.data && result.data.message) || 'Login failed';

@@ -22,7 +22,9 @@ extern volatile bool eepromDirty;   // committed from main task loop()
 
 // ── Session token (single slot, RAM only — cleared on reboot) ─────────────
 #define SESSION_TOKEN_LEN 32
+#define SESSION_INACTIVITY_MS (15UL * 60UL * 1000UL)
 static char sessionToken[SESSION_TOKEN_LEN + 1] = {0};
+static unsigned long sessionLastActivity = 0;
 
 static void generateToken() {
     const char hex[] = "0123456789abcdef";
@@ -39,7 +41,14 @@ static bool isAuthorised(httpd_req_t *req) {
     uint8_t diff = 0;
     for (int i = 0; i < SESSION_TOKEN_LEN; i++)
         diff |= (uint8_t)sessionToken[i] ^ (uint8_t)buf[i];
-    return diff == 0;
+    if (diff != 0) return false;
+    if (millis() - sessionLastActivity >= SESSION_INACTIVITY_MS) {
+        memset(sessionToken, 0, sizeof(sessionToken));
+        sessionLastActivity = 0;
+        return false;
+    }
+    sessionLastActivity = millis();
+    return true;
 }
 
 static esp_err_t sendUnauthorised(httpd_req_t *req) {
@@ -87,6 +96,7 @@ char* apiLoginHandlerHook(httpd_req_t *req) {
             strncpy(attempt, pass_j->valuestring, ADMIN_PASS_LEN);
             if (checkAdminPassword(attempt)) {
                 generateToken();
+                sessionLastActivity = millis();
                 cJSON_AddBoolToObject(response, "success", true);
                 cJSON_AddStringToObject(response, "token", sessionToken);
             } else {
@@ -107,6 +117,7 @@ char* apiLoginHandlerHook(httpd_req_t *req) {
 char* apiLogoutHandlerHook(httpd_req_t *req) {
     if (!isAuthorised(req)) { sendUnauthorised(req); return nullptr; }
     memset(sessionToken, 0, sizeof(sessionToken));
+    sessionLastActivity = 0;
     cJSON *response = cJSON_CreateObject();
     cJSON_AddBoolToObject(response, "success", true);
     cJSON_AddStringToObject(response, "message", "Logged out");
@@ -148,6 +159,7 @@ char* apiAuthChangePasswordHandlerHook(httpd_req_t *req) {
             } else {
                 saveAdminPassword(new_j->valuestring);
                 memset(sessionToken, 0, sizeof(sessionToken));
+                sessionLastActivity = 0;
                 cJSON_AddBoolToObject(response, "success", true);
                 cJSON_AddStringToObject(response, "message", "Password updated. Please log in again.");
             }

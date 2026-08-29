@@ -328,5 +328,48 @@ const WiFiManager = {
     }
 };
 
+const SESSION_INACTIVITY_MS = 15 * 60 * 1000;
+
+function redirectToLogin() {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('lastActivity');
+    if (!window.location.pathname.startsWith('/login')) {
+        window.location.replace('/login');
+    }
+}
+
+function installSessionGuard() {
+    if (window.location.pathname.startsWith('/login')) return;
+    if (!localStorage.getItem('authToken')) {
+        redirectToLogin();
+        return;
+    }
+
+    let timer;
+    function armTimer() {
+        clearTimeout(timer);
+        const lastActivity = Number(localStorage.getItem('lastActivity'));
+        const remaining = SESSION_INACTIVITY_MS - (Date.now() - lastActivity);
+        if (!Number.isFinite(lastActivity) || remaining <= 0) {
+            redirectToLogin();
+            return;
+        }
+        timer = setTimeout(redirectToLogin, remaining);
+    }
+
+    function recordActivity() {
+        localStorage.setItem('lastActivity', String(Date.now()));
+        armTimer();
+    }
+
+    ['pointerdown', 'keydown', 'touchstart'].forEach(eventName => {
+        document.addEventListener(eventName, recordActivity, { passive: true });
+    });
+    window.addEventListener('pageshow', armTimer);
+    armTimer();
+}
+
+installSessionGuard();
+
 // Initialize API instance globally
 const api = new ESP32WebAPI();

@@ -4,13 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Home Controller</title>
-    <link rel="stylesheet" href="/Css/style.css?v=6">
+    <link rel="stylesheet" href="/Css/style.css?v=7">
     <script>
         (function(){
             var t=localStorage.getItem('theme');
-            if(t==='dark'||(!t&&matchMedia('(prefers-color-scheme:dark)').matches)){
-                document.documentElement.setAttribute('data-theme','dark');
-            }
+            var dark=t==='dark'||(!t&&matchMedia('(prefers-color-scheme:dark)').matches);
+            document.documentElement.setAttribute('data-theme',dark?'dark':'light');
         })();
     </script>
 </head>
@@ -128,7 +127,7 @@
         </div>
     </div>
 
-    <script src="/Js/app.js?v=7"></script>
+    <script src="/Js/app.js?v=10"></script>
     <script>
         if (!localStorage.getItem('authToken')) {
             window.location.replace('/login');
@@ -218,8 +217,7 @@
         (function() {
             const btn = document.getElementById('themeToggle');
             function applyTheme(dark) {
-                dark ? document.documentElement.setAttribute('data-theme','dark')
-                     : document.documentElement.removeAttribute('data-theme');
+                document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
                 btn.textContent = dark ? '\u2600' : '\u263D';
             }
             applyTheme(document.documentElement.getAttribute('data-theme') === 'dark');
@@ -234,6 +232,7 @@
         document.getElementById('menuLogout').addEventListener('click', async function() {
             await api.logout();
             localStorage.removeItem('authToken');
+            localStorage.removeItem('lastActivity');
             window.location.replace('/login');
         });
 
@@ -253,6 +252,7 @@
             // Clear the local session immediately — the ESP32 reboot destroys
             // the in-RAM token, so any stored token is now invalid.
             localStorage.removeItem('authToken');
+            localStorage.removeItem('lastActivity');
             // Show a countdown alert then redirect to login
             let secs = 8;
             const alertContainer = document.getElementById('alertContainer');
@@ -291,6 +291,7 @@
             if (result.success && result.data && result.data.success) {
                 document.getElementById('changePwModal').style.display = 'none';
                 localStorage.removeItem('authToken');
+                localStorage.removeItem('lastActivity');
                 window.location.replace('/login');
             } else {
                 Utils.showAlert((result.data && result.data.message) || 'Failed', 'danger', 'modalAlertContainer');

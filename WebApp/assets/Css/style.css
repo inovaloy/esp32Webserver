@@ -56,7 +56,7 @@
 
 /* System dark mode preference */
 @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
         --bg:           #141a14;
         --surface:      #1e281e;
         --surface-2:    #253025;
