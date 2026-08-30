@@ -1,7 +1,7 @@
 .temp
 *.patch
 build/
-Src/AutoGen/
-Scripts/__pycache__/
+src/autoGen/
+scripts/__pycache__/
 .venv/
 *.egg-info/

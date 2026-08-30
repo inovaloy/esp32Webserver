@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Home Controller</title>
-    <link rel="stylesheet" href="/Css/style.css?v=15">
+    <link rel="stylesheet" href="/css/style.css?v=15">
     <script>
         (function(){
             var t=localStorage.getItem('theme');
@@ -162,7 +162,7 @@
         </div>
     </div>
 
-    <script src="/Js/app.js?v=16"></script>
+    <script src="/js/app.js?v=16"></script>
     <script>
         if (!localStorage.getItem('authToken')) {
             window.location.replace('/login');
@@ -216,6 +216,7 @@
             if (!result.success || !result.data.success) return;
             document.querySelectorAll('.controller-name').forEach(el => el.textContent = result.data.controllerName);
             document.title = result.data.controllerName;
+            localStorage.setItem('controllerName', result.data.controllerName);
             localStorage.setItem('logoutMinutes', String(result.data.logoutMinutes));
             if (result.data.mustChangePassword) {
                 document.getElementById('initialPasswordModal').style.display = 'flex';

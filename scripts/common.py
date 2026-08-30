@@ -1,13 +1,13 @@
 import os
 
 # Configuration
-WEB_APP_DIR               = "WebApp"
+WEB_APP_DIR               = "webApp"
 HTML_DIR                  = os.path.join(WEB_APP_DIR, "html")
 ASSETS_DIR                = os.path.join(WEB_APP_DIR, "assets")
 LINKER_DATA_FILE          = os.path.join(WEB_APP_DIR, "linkerData.yaml")
 
-AUTOGEN_DEST_DIR          = "Src/AutoGen"
-BUILD_DIR                 = ".temp/AutoGen"
+AUTOGEN_DEST_DIR          = "src/autoGen"
+BUILD_DIR                 = ".temp/autoGen"
 
 AUTOGEN_ASSET_INFO_FILE   = "autoGenAssetsInfo.json"
 AUTOGEN_HTML_INFO_FILE    = "autoGenHtmlInfo.json"

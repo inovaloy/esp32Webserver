@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Device Config Compiler for ESP32 Webserver
-Reads WebApp/deviceConfig.yaml and generates Src/AutoGen/autoGenDeviceConfig.h
+Reads webApp/deviceConfig.yaml and generates src/autoGen/autoGenDeviceConfig.h
 """
 
 import os
@@ -53,7 +53,7 @@ def compileDeviceConfig():
     with io.open(header_path, "w", newline='\n') as h:
         h.write(f"""/*
  * This is an autogen file; Do not change manually.
- * Generated from WebApp/deviceConfig.yaml
+ * Generated from webApp/deviceConfig.yaml
  */
 
 #ifndef AUTOGEN_DEVICE_CONFIG_H
