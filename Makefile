@@ -15,18 +15,18 @@ all: help
 
 # Autogen target that builds HTML, assets, and web server code
 autogen:
-	.venv/bin/python3 Scripts/compileDeviceConfig.py
-	.venv/bin/python3 Scripts/compileHtml.py
-	.venv/bin/python3 Scripts/compileAssets.py
-	.venv/bin/python3 Scripts/updateWebServer.py
+	.venv/bin/python3 scripts/compileDeviceConfig.py
+	.venv/bin/python3 scripts/compileHtml.py
+	.venv/bin/python3 scripts/compileAssets.py
+	.venv/bin/python3 scripts/updateWebServer.py
 
 
 build: autogen
-	cd Src && make ${PARAMS} && cd ..
+	cd src && make ${PARAMS} && cd ..
 
 
 flash: build
-	cd Src && make flash ${PARAMS} && cd ..
+	cd src && make flash ${PARAMS} && cd ..
 
 
 # Erase the entire chip flash then do a full flash.
@@ -66,10 +66,10 @@ configure:
 
 
 clean:
-	cd Src && make clean ${PARAMS} && cd ..
-	rm -rf ${ROOT}/Src/AutoGen/
+	cd src && make clean ${PARAMS} && cd ..
+	rm -rf ${ROOT}/src/autoGen/
 	rm -rf ${ROOT}/build/
-	rm -rf ${TEMP_DIR}/AutoGen/
+	rm -rf ${TEMP_DIR}/autoGen/
 
 
 help:

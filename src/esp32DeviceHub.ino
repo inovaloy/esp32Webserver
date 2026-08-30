@@ -1,7 +1,7 @@
 #include <WiFi.h>
 #include <DNSServer.h>
 #include <EEPROM.h>
-#include "AutoGen/autoGenWebServer.h"
+#include "autoGen/autoGenWebServer.h"
 #include "deviceConfig.h"
 #include <SPI.h>
 #include <Wire.h>
@@ -42,8 +42,8 @@ bool oledEnabled = true;
 bool adminPasswordChangeRequired = true;
 
 // AP credentials — derived from MAC at runtime
-char ap_ssid[32];
-char ap_password[16];
+char apSsid[32];
+char apPassword[16];
 const IPAddress apIP(192, 168, 4, 1);
 const IPAddress netMsk(255, 255, 255, 0);
 
@@ -102,8 +102,8 @@ void setup()
     mac[3] = (chipId >> 16) & 0xFF;
     mac[4] = (chipId >>  8) & 0xFF;
     mac[5] = (chipId >>  0) & 0xFF;
-    snprintf(ap_ssid,     sizeof(ap_ssid),     "ESP32-%02X%02X",     mac[4], mac[5]);
-    snprintf(ap_password, sizeof(ap_password), "%02X%02X%02X%02X", mac[2], mac[3], mac[4], mac[5]);
+    snprintf(apSsid,     sizeof(apSsid),     "ESP32-%02X%02X",     mac[4], mac[5]);
+    snprintf(apPassword, sizeof(apPassword), "%02X%02X%02X%02X", mac[2], mac[3], mac[4], mac[5]);
 
     // Initialize EEPROM
     #if !CFG_STORAGE_EXTERNAL
@@ -357,16 +357,16 @@ void startAPMode() {
     display.setTextSize(1);
     display.setCursor(0, 0);
     display.println("AP Mode Started");
-    display.printf("SSID: %s\n", ap_ssid);
-    display.printf("Password: %s\n", ap_password);
+    display.printf("SSID: %s\n", apSsid);
+    display.printf("Password: %s\n", apPassword);
     display.printf("IP: %s\n", apIP.toString().c_str());
     display.display();
 
-    Serial.printf("Starting AP Mode - SSID: %s, Password: %s\r\n", ap_ssid, ap_password);
+    Serial.printf("Starting AP Mode - SSID: %s, Password: %s\r\n", apSsid, apPassword);
 
     WiFi.mode(WIFI_AP);
     WiFi.softAPConfig(apIP, apIP, netMsk);
-    WiFi.softAP(ap_ssid, ap_password);
+    WiFi.softAP(apSsid, apPassword);
 
     // Start DNS server for captive portal
     dnsServer.start(53, "*", apIP);
@@ -432,7 +432,7 @@ void updateOledDeviceStatus() {
     if (WiFi.status() == WL_CONNECTED)
         display.printf("WiFi: %s", WiFi.SSID().c_str());
     else
-        display.printf("AP: %s", ap_ssid);
+        display.printf("AP: %s", apSsid);
     display.drawLine(0, 20, 127, 20, WHITE);
     uint8_t shown = deviceCount < 6 ? deviceCount : 6;
     for (uint8_t i = 0; i < shown; i++) {

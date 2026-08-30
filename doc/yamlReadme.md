@@ -10,7 +10,7 @@ This project now uses **YAML format exclusively** for linker data configuration,
    ```
 
 2. **Configuration File:**
-   Edit `WebApp/linkerData.yaml` to define your routes:
+   Edit `webApp/linkerData.yaml` to define your routes:
    ```yaml
    # Variables for consistency
    httpMethods: &httpMethods
@@ -33,18 +33,18 @@ This project now uses **YAML format exclusively** for linker data configuration,
 3. **Build Scripts:**
    ```bash
    # Compile HTML files
-   python3 Scripts/compileHtml.py
+   python3 scripts/compileHtml.py
 
    # Compile assets (CSS, JS, images)
-   python3 Scripts/compileAssets.py
+   python3 scripts/compileAssets.py
 
    # Generate web server code
-   python3 Scripts/updateWebServer.py
+   python3 scripts/updateWebServer.py
    ```
 
 4. **Test Configuration:**
    ```bash
-   python3 Scripts/testYamlSupport.py
+   python3 scripts/testYamlSupport.py
    ```
 
 ## Benefits of YAML Format
@@ -63,4 +63,4 @@ If you have an existing `linkerData.json`:
 3. Add variable definitions for consistency
 4. Remove the old JSON file
 
-For detailed documentation, see `Scripts/YAML_SUPPORT.md`.
+For detailed documentation, see `doc/yamlSupport.md`.

@@ -5,7 +5,7 @@ The ESP32 Web Server project uses YAML format for the linker data configuration,
 ## Features
 
 ### 1. YAML-Only Format
-- **Configuration File**: `WebApp/linkerData.yaml`
+- **Configuration File**: `webApp/linkerData.yaml`
 - **Clean syntax**: Human-readable YAML format
 - **No legacy support**: Simplified codebase with single format
 

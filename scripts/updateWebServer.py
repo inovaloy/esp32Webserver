@@ -143,12 +143,12 @@ def generateImplementationFile(htmlPages, assets, apiEndpoints):
 #include "Arduino.h"
 #include "esp_http_server.h"
 
-#include "AutoGen/autoGenHtmlData.h"
-#include "AutoGen/autoGenWebServer.h"
+#include "autoGen/autoGenHtmlData.h"
+#include "autoGen/autoGenWebServer.h"
 """)
 
         if assets:
-            cpp.write('#include "AutoGen/autoGenAssets.h"\n')
+            cpp.write('#include "autoGen/autoGenAssets.h"\n')
 
         cpp.write("""
 #include "webServer.h"

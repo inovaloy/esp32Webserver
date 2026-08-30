@@ -43,7 +43,7 @@ contentTypes: &contentTypes
 
 "/page/wifi" :
     rtnType : *rtnHTML
-    fileName: "wifi_config.html"
+    fileName: "wifiConfig.html"
     macro   : "WIFI_CONFIG_HTML"
     reqType : *httpGET
 
@@ -56,16 +56,16 @@ contentTypes: &contentTypes
 
 # Static Assets - CSS, JavaScript and media files
 # Frontend resources served with appropriate MIME types for web interface styling and functionality
-"/Css/style.css" :
+"/css/style.css" :
     rtnType    : *rtnASSET
-    fileName   : "Css/style.css"
+    fileName   : "css/style.css"
     macro      : "STYLE_CSS"
     contentType: *cssType
     reqType    : *httpGET
 
-"/Js/app.js" :
+"/js/app.js" :
     rtnType    : *rtnASSET
-    fileName   : "Js/app.js"
+    fileName   : "js/app.js"
     macro      : "APP_JS"
     contentType: *jsType
     reqType    : *httpGET

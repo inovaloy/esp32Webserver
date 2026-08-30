@@ -1,6 +1,6 @@
 #include "esp_http_server.h"
-#include "AutoGen/autoGenHtmlData.h"
-#include "AutoGen/autoGenWebServer.h"
+#include "autoGen/autoGenHtmlData.h"
+#include "autoGen/autoGenWebServer.h"
 #include "Arduino.h"
 #include "webServer.h"
 #include "webServerHelper.h"
