@@ -20,19 +20,29 @@ def compileDeviceConfig():
         data = yaml.safe_load(f)
 
     maxDevices = int(data.get("maxDevices", 16))
-    pins       = data.get("gpioPins", [])
+    highVoltagePins = data.get("highVoltageGpioPins", [])
+    lowVoltagePins  = data.get("lowVoltageGpioPins", [])
 
     # Clamp: can never exceed firmware hard limit of 16
     if maxDevices > 16:
         print(f"Warning: maxDevices {maxDevices} > 16, clamping to 16")
         maxDevices = 16
 
-    # Only take the first maxDevices pins from the list
-    pins = [int(p) for p in pins[:maxDevices]]
+    highVoltagePins = [int(p) for p in highVoltagePins]
+    lowVoltagePins  = [int(p) for p in lowVoltagePins]
+    pins = highVoltagePins + lowVoltagePins
+    if len(pins) > maxDevices:
+        print(f"Warning: configured GPIO pins exceed maxDevices {maxDevices}; truncating")
+        pins = pins[:maxDevices]
+        highVoltagePins = pins[:len(highVoltagePins)]
+        lowVoltagePins = pins[len(highVoltagePins):]
+    highVoltagePinCount = len(highVoltagePins)
+    lowVoltagePinCount = len(lowVoltagePins)
     pinCount = len(pins)
 
     print(f"maxDevices : {maxDevices}")
-    print(f"gpioPins   : {pins} ({pinCount} entries)")
+    print(f"high voltage GPIOs: {highVoltagePins} ({highVoltagePinCount} entries)")
+    print(f"low voltage GPIOs : {lowVoltagePins} ({lowVoltagePinCount} entries)")
 
     os.makedirs(BUILD_DIR, exist_ok=True)
 
@@ -51,10 +61,15 @@ def compileDeviceConfig():
 // Maximum number of devices the user is allowed to add
 #define CFG_MAX_DEVICES {maxDevices}
 
-// Allowed GPIO pins (in order) — length CFG_PIN_COUNT
-#define CFG_PIN_COUNT {pinCount}
-static const uint8_t CFG_ALLOWED_PINS[CFG_PIN_COUNT] = {{
-    {', '.join(str(p) for p in pins)}
+// GPIO pins grouped by voltage category
+#define CFG_HIGH_VOLTAGE_PIN_COUNT {highVoltagePinCount}
+static const uint8_t CFG_HIGH_VOLTAGE_PINS[CFG_HIGH_VOLTAGE_PIN_COUNT] = {{
+    {', '.join(str(p) for p in highVoltagePins)}
+}};
+
+#define CFG_LOW_VOLTAGE_PIN_COUNT {lowVoltagePinCount}
+static const uint8_t CFG_LOW_VOLTAGE_PINS[CFG_LOW_VOLTAGE_PIN_COUNT] = {{
+    {', '.join(str(p) for p in lowVoltagePins)}
 }};
 
 #endif // AUTOGEN_DEVICE_CONFIG_H

@@ -264,24 +264,37 @@ char* apiWifiConnectHandlerHook(httpd_req_t *req) {
 
 // ── Device API ────────────────────────────────────────────────────────────
 
-// GET /api/device-config — returns maxDevices and available (unallocated) pins
+// GET /api/device-config — returns available pins grouped by voltage
 char* apiDeviceConfigHandlerHook(httpd_req_t *req) {
     bool inUse[256] = {false};
     for (uint8_t i = 0; i < deviceCount; i++)
         inUse[devices[i].pin] = true;
 
     cJSON *response  = cJSON_CreateObject();
-    cJSON *available = cJSON_CreateArray();
+    cJSON *highVoltagePins = cJSON_CreateArray();
+    cJSON *lowVoltagePins = cJSON_CreateArray();
+    cJSON *availableHigh = cJSON_CreateArray();
+    cJSON *availableLow = cJSON_CreateArray();
 
-    for (int i = 0; i < CFG_PIN_COUNT; i++) {
-        uint8_t pin = CFG_ALLOWED_PINS[i];
+    for (int i = 0; i < CFG_HIGH_VOLTAGE_PIN_COUNT; i++) {
+        uint8_t pin = CFG_HIGH_VOLTAGE_PINS[i];
+        cJSON_AddItemToArray(highVoltagePins, cJSON_CreateNumber(pin));
         if (!inUse[pin])
-            cJSON_AddItemToArray(available, cJSON_CreateNumber(pin));
+            cJSON_AddItemToArray(availableHigh, cJSON_CreateNumber(pin));
+    }
+    for (int i = 0; i < CFG_LOW_VOLTAGE_PIN_COUNT; i++) {
+        uint8_t pin = CFG_LOW_VOLTAGE_PINS[i];
+        cJSON_AddItemToArray(lowVoltagePins, cJSON_CreateNumber(pin));
+        if (!inUse[pin])
+            cJSON_AddItemToArray(availableLow, cJSON_CreateNumber(pin));
     }
 
     cJSON_AddNumberToObject(response, "maxDevices",     CFG_MAX_DEVICES);
     cJSON_AddNumberToObject(response, "currentDevices", deviceCount);
-    cJSON_AddItemToObject(response,   "availablePins",  available);
+    cJSON_AddItemToObject(response,   "highVoltagePins", highVoltagePins);
+    cJSON_AddItemToObject(response,   "lowVoltagePins",  lowVoltagePins);
+    cJSON_AddItemToObject(response,   "availableHighVoltagePins", availableHigh);
+    cJSON_AddItemToObject(response,   "availableLowVoltagePins",  availableLow);
 
     char *out = cJSON_Print(response);
     cJSON_Delete(response);
@@ -323,7 +336,7 @@ char* apiDevicesHandlerHook(httpd_req_t *req) {
     return out;
 }
 
-// POST /api/devices/add  { "name": "Lamp", "pin": 26 }
+// POST /api/devices/add  { "name": "Lamp", "pin": 26, "voltage": "high" }
 char* apiDevicesAddHandlerHook(httpd_req_t *req) {
     if (!isAuthorised(req)) { sendUnauthorised(req); return nullptr; }
 
@@ -333,18 +346,33 @@ char* apiDevicesAddHandlerHook(httpd_req_t *req) {
     cJSON *json = cJSON_Parse(jsonData);
     free(jsonData);
     cJSON *response = cJSON_CreateObject();
+    bool inUse[256] = {false};
+    for (uint8_t i = 0; i < deviceCount; i++)
+        inUse[devices[i].pin] = true;
 
     if (json == NULL) {
         cJSON_AddBoolToObject(response, "success", false);
         cJSON_AddStringToObject(response, "message", "Invalid JSON");
     } else if (deviceCount >= MAX_DEVICES) {
         cJSON_AddBoolToObject(response, "success", false);
-        cJSON_AddStringToObject(response, "message", "Maximum 16 devices reached");
+        cJSON_AddStringToObject(response, "message", "Maximum device limit reached");
         cJSON_Delete(json);
     } else {
         cJSON *name_j = cJSON_GetObjectItem(json, "name");
         cJSON *pin_j  = cJSON_GetObjectItem(json, "pin");
-        if (cJSON_IsString(name_j) && cJSON_IsNumber(pin_j)) {
+        cJSON *voltage_j = cJSON_GetObjectItem(json, "voltage");
+        bool highVoltage = cJSON_IsString(voltage_j) && strcmp(voltage_j->valuestring, "high") == 0;
+        bool lowVoltage = cJSON_IsString(voltage_j) && strcmp(voltage_j->valuestring, "low") == 0;
+        bool allowedPin = false;
+        if (cJSON_IsNumber(pin_j)) {
+            const uint8_t pin = (uint8_t)pin_j->valuedouble;
+            const uint8_t *allowedPins = highVoltage ? CFG_HIGH_VOLTAGE_PINS : CFG_LOW_VOLTAGE_PINS;
+            const uint8_t allowedPinCount = highVoltage ? CFG_HIGH_VOLTAGE_PIN_COUNT : CFG_LOW_VOLTAGE_PIN_COUNT;
+            for (uint8_t i = 0; i < allowedPinCount; i++) {
+                if (allowedPins[i] == pin && !inUse[pin]) { allowedPin = true; break; }
+            }
+        }
+        if (cJSON_IsString(name_j) && cJSON_IsNumber(pin_j) && (highVoltage || lowVoltage) && allowedPin) {
             uint8_t idx = deviceCount;
             strncpy(devices[idx].name, name_j->valuestring, DEVICE_NAME_LEN - 1);
             devices[idx].name[DEVICE_NAME_LEN - 1] = '\0';
@@ -360,7 +388,7 @@ char* apiDevicesAddHandlerHook(httpd_req_t *req) {
             cJSON_AddNumberToObject(response, "index", idx);
         } else {
             cJSON_AddBoolToObject(response, "success", false);
-            cJSON_AddStringToObject(response, "message", "name (string) and pin (number) required");
+            cJSON_AddStringToObject(response, "message", "name, voltage (high/low), and an available GPIO pin are required");
         }
         cJSON_Delete(json);
     }

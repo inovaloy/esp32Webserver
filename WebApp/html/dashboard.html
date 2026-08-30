@@ -18,6 +18,13 @@
                        placeholder="e.g. Bedroom Lamp" maxlength="15">
             </div>
             <div class="form-group">
+                <label>Voltage</label>
+                <select id="newDeviceVoltage" class="form-control">
+                    <option value="high">High Voltage</option>
+                    <option value="low">Low Voltage</option>
+                </select>
+            </div>
+            <div class="form-group">
                 <label>GPIO Pin</label>
                 <select id="newDevicePin" class="form-control">
                     <option value="">Loading pins...</option>
@@ -31,8 +38,8 @@
 <script>
     // ── Init ──────────────────────────────────────────────────────────
     (async function initDashboard() {
-        await renderDevices();
         await loadDeviceConfig();
+        await renderDevices();
     })();
 
     // ── Device config (max devices + available pins) ───────────────────
@@ -44,6 +51,7 @@
         const atMax      = cfg.currentDevices >= cfg.maxDevices;
         const addBtn     = document.getElementById('toggleAddForm');
         const pinSelect  = document.getElementById('newDevicePin');
+        const voltageSelect = document.getElementById('newDeviceVoltage');
 
         // Hide or show the Add button based on capacity
         if (atMax) {
@@ -56,11 +64,16 @@
             addBtn.title = '';
         }
 
-        // Populate pin dropdown with available pins
-        if (cfg.availablePins.length === 0) {
+        populateAvailablePins(cfg, voltageSelect.value);
+    }
+
+    function populateAvailablePins(cfg, voltage) {
+        const pinSelect = document.getElementById('newDevicePin');
+        const pins = voltage === 'high' ? cfg.availableHighVoltagePins : cfg.availableLowVoltagePins;
+        if (pins.length === 0) {
             pinSelect.innerHTML = '<option value="">No pins available</option>';
         } else {
-            pinSelect.innerHTML = cfg.availablePins
+            pinSelect.innerHTML = pins
                 .map(p => `<option value="${p}">GPIO ${p}</option>`)
                 .join('');
         }
@@ -75,25 +88,33 @@
             return;
         }
         const devices = result.data.devices;
-        if (devices.length === 0) {
-            grid.innerHTML = '<div class="empty-state">No devices added yet.<br>Use the button below to add one.</div>';
-            return;
-        }
-        grid.innerHTML = devices.map(d => `
-            <div class="device-card ${d.state ? 'device-on' : ''}" id="card-${d.index}">
-                <div class="device-info">
-                    <div class="device-name">${escHtml(d.name)}</div>
-                    <div class="device-pin">GPIO ${d.pin}</div>
+        const config = await api.getDeviceConfig();
+        const highPins = config.success ? config.data.highVoltagePins : [];
+        const highDevices = devices.filter(d => highPins.includes(d.pin));
+        const lowDevices = devices.filter(d => !highPins.includes(d.pin));
+        grid.innerHTML = renderVoltageSection('High Voltage Devices', highDevices)
+            + renderVoltageSection('Low Voltage Devices', lowDevices);
+    }
+
+    function renderVoltageSection(title, devices) {
+        const cards = devices.length === 0
+            ? '<div class="voltage-empty">No devices</div>'
+            : devices.map(d => `
+                <div class="device-card ${d.state ? 'device-on' : ''}" id="card-${d.index}">
+                    <div class="device-info">
+                        <div class="device-name">${escHtml(d.name)}</div>
+                        <div class="device-pin">GPIO ${d.pin}</div>
+                    </div>
+                    <div class="device-controls">
+                        <label class="toggle-switch">
+                            <input type="checkbox" ${d.state ? 'checked' : ''} onchange="toggleDevice(${d.index}, this.checked)">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <button class="btn-remove" onclick="removeDevice(${d.index})" title="Remove">&#10005;</button>
+                    </div>
                 </div>
-                <div class="device-controls">
-                    <label class="toggle-switch">
-                        <input type="checkbox" ${d.state ? 'checked' : ''} onchange="toggleDevice(${d.index}, this.checked)">
-                        <span class="toggle-slider"></span>
-                    </label>
-                    <button class="btn-remove" onclick="removeDevice(${d.index})" title="Remove">&#10005;</button>
-                </div>
-            </div>
-        `).join('');
+            `).join('');
+        return `<section class="voltage-section"><h3>${title}</h3><div class="device-grid">${cards}</div></section>`;
     }
 
     async function toggleDevice(index, state) {
@@ -130,23 +151,29 @@
         this.textContent = show ? '✕ Cancel' : '+ Add Device';
     });
 
+    document.getElementById('newDeviceVoltage').addEventListener('change', async function () {
+        const result = await api.getDeviceConfig();
+        if (result.success) populateAvailablePins(result.data, this.value);
+    });
+
     document.getElementById('addDeviceBtn').addEventListener('click', async function () {
         const name = document.getElementById('newDeviceName').value.trim();
+        const voltage = document.getElementById('newDeviceVoltage').value;
         const pinEl = document.getElementById('newDevicePin');
         const pin  = parseInt(pinEl.value, 10);
         if (!name) { Utils.showAlert('Device name is required', 'danger'); return; }
         if (isNaN(pin)) { Utils.showAlert('Select a GPIO pin', 'danger'); return; }
         this.disabled = true;
         this.textContent = 'Adding...';
-        const result = await api.addDevice(name, pin);
+        const result = await api.addDevice(name, pin, voltage);
         this.disabled = false;
         this.textContent = 'Add Device';
         if (result.success && result.data.success) {
             document.getElementById('newDeviceName').value = '';
             document.getElementById('addDeviceForm').style.display = 'none';
             document.getElementById('toggleAddForm').textContent = '+ Add Device';
-            await renderDevices();
             await loadDeviceConfig();   // refresh available pins after add
+            await renderDevices();
         } else {
             Utils.showAlert(result.data && result.data.message || 'Failed to add device', 'danger');
         }

@@ -357,6 +357,19 @@ a:hover { text-decoration: underline; }
     gap: 12px;
     margin-bottom: 20px;
 }
+#deviceGrid { display: block; }
+
+.voltage-section h3 {
+    margin: 0 0 10px;
+    color: var(--text-muted);
+    font-size: 14px;
+}
+.voltage-section .device-grid { margin-bottom: 22px; }
+.voltage-empty {
+    color: var(--text-faint);
+    font-size: 13px;
+    padding: 14px 0;
+}
 
 .device-card {
     background: var(--surface-2);
@@ -475,7 +488,7 @@ a:hover { text-decoration: underline; }
 
 .form-row {
     display: grid;
-    grid-template-columns: 1fr 110px;
+    grid-template-columns: 1fr 130px 110px;
     gap: 10px;
     margin-bottom: 12px;
 }

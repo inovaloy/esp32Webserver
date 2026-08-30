@@ -84,8 +84,8 @@ class ESP32WebAPI {
         return this.get('/api/devices');
     }
 
-    async addDevice(name, pin) {
-        return this.post('/api/devices/add', { name, pin });
+    async addDevice(name, pin, voltage) {
+        return this.post('/api/devices/add', { name, pin, voltage });
     }
 
     async toggleDevice(index, state) {
