@@ -60,6 +60,9 @@ class ESP32WebAPI {
     async changePassword(current, newPassword) {
         return this.post('/api/auth/change-password', { current, 'new': newPassword });
     }
+    async setInitialPassword(password) {
+        return this.post('/api/auth/set-initial-password', { password });
+    }
 
     async getSettings() {
         return this.get('/api/settings');
@@ -71,7 +74,7 @@ class ESP32WebAPI {
 
     async getSettingsBackup() { return this.get('/api/settings/backup'); }
     async restoreSettings(data) { return this.post('/api/settings/restore', data); }
-    async factoryReset() { return this.post('/api/settings/factory-reset', {}); }
+    async factoryReset(password) { return this.post('/api/settings/factory-reset', { password }); }
 
     // WiFi API methods
     async getWiFiStatus() {

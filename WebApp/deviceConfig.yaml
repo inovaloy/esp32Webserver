@@ -8,6 +8,9 @@
 
 maxDevices: 8
 
+# storageBackend: internal (ESP32 flash emulation) or external (24LC64 at 0x50)
+storageBackend: external
+
 highVoltageGpioPins:
   - 26
   - 27

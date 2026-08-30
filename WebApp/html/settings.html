@@ -97,12 +97,34 @@
     });
 
     document.getElementById('factoryResetBtn').addEventListener('click', async function () {
-        if (!confirm('Factory reset all settings and devices? The controller will reboot.')) return;
-        const result = await api.factoryReset();
+        const modal = document.getElementById('factoryResetModal');
+        const password = document.getElementById('factoryResetPassword');
+        password.value = '';
+        modal.style.display = 'flex';
+        password.focus();
+    });
+
+    document.getElementById('cancelFactoryResetBtn').addEventListener('click', function () {
+        document.getElementById('factoryResetModal').style.display = 'none';
+    });
+
+    document.getElementById('confirmFactoryResetBtn').addEventListener('click', async function () {
+        const password = document.getElementById('factoryResetPassword').value;
+        if (!password) {
+            Utils.showAlert('Admin password is required', 'danger');
+            return;
+        }
+        this.disabled = true;
+        const result = await api.factoryReset(password);
+        this.disabled = false;
         if (result.success && result.data.success) {
+            document.getElementById('factoryResetModal').style.display = 'none';
             localStorage.clear();
             Utils.showAlert('Factory reset started', 'success');
             setTimeout(() => window.location.replace('/login'), 1500);
-        } else Utils.showAlert('Factory reset failed', 'danger');
+        } else {
+            document.getElementById('factoryResetPassword').value = '';
+            Utils.showAlert(result.data && result.data.message || 'Factory reset failed', 'danger');
+        }
     });
 </script>

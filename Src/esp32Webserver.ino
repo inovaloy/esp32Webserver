@@ -13,6 +13,8 @@
 
 // Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
+#define OLED_I2C_ADDRESS 0x3C
+#define EXTERNAL_EEPROM_I2C_ADDRESS 0x50
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // WiFi Configuration
@@ -24,6 +26,8 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #define MAX_PASS_LENGTH 64
 #define EEPROM_MAGIC_ADDR 200
 #define EEPROM_MAGIC_BYTE 0xA5
+#define FACTORY_RESET_BUTTON_PIN 23
+#define FACTORY_RESET_HOLD_TIME 10000
 
 // Runtime device list (loaded from EEPROM at boot)
 Device  devices[MAX_DEVICES];
@@ -35,6 +39,7 @@ char controllerName[CONTROLLER_NAME_LEN];
 uint16_t logoutMinutes = DEFAULT_LOGOUT_MINUTES;
 uint8_t oledBrightness = DEFAULT_OLED_BRIGHTNESS;
 bool oledEnabled = true;
+bool adminPasswordChangeRequired = true;
 
 // AP credentials — derived from MAC at runtime
 char ap_ssid[32];
@@ -49,6 +54,8 @@ int counter = 0;
 volatile bool rebootScheduled = false;
 unsigned long rebootAt = 0;
 volatile bool eepromDirty = false;   // set by httpd task; committed + rebooted in loop()
+unsigned long factoryResetButtonPressedAt = 0;
+bool factoryResetButtonHandled = false;
 
 // Function declarations
 bool eepromIsValid();
@@ -62,12 +69,22 @@ void loadDevicesFromEEPROM();
 void saveDevicesToEEPROM();
 void updateOledDeviceStatus();
 void loadAdminPasswordFromEEPROM();
-void saveAdminPassword(const char* newPassword);
+void saveAdminPassword(const char* newPassword, bool markConfigured = true);
 bool checkAdminPassword(const char* attempt);
 void loadControllerSettings();
 void saveControllerSettings(const char* name, uint16_t minutes);
 void saveOledSettings(uint8_t brightness, bool enabled);
+void applyOledSettings();
 void factoryResetSettings();
+void checkFactoryResetButton();
+uint8_t storageRead(int address);
+void storageWrite(int address, uint8_t value);
+void storageCommit();
+
+bool i2cDevicePresent(uint8_t address) {
+    Wire.beginTransmission(address);
+    return Wire.endTransmission() == 0;
+}
 
 void setup()
 {
@@ -89,22 +106,44 @@ void setup()
     snprintf(ap_password, sizeof(ap_password), "%02X%02X%02X%02X", mac[2], mac[3], mac[4], mac[5]);
 
     // Initialize EEPROM
+    #if !CFG_STORAGE_EXTERNAL
     EEPROM.begin(EEPROM_SIZE);
+    #endif
+
+    // Check the I2C peripherals before using them.
+    Wire.begin();
+    bool oledPresent = i2cDevicePresent(OLED_I2C_ADDRESS);
+    bool externalEepromPresent = i2cDevicePresent(EXTERNAL_EEPROM_I2C_ADDRESS);
+    Serial.printf("[I2C] OLED (0x%02X): %s\r\n", OLED_I2C_ADDRESS,
+                  oledPresent ? "FOUND" : "NOT FOUND");
+    Serial.printf("[I2C] External EEPROM 24LC64 (0x%02X): %s\r\n", EXTERNAL_EEPROM_I2C_ADDRESS,
+                  externalEepromPresent ? "FOUND" : "NOT FOUND");
+    #if CFG_STORAGE_EXTERNAL
+    if (!externalEepromPresent) {
+        Serial.println("[STORAGE] External EEPROM selected but not found; storage is unavailable");
+    } else {
+        Serial.println("[STORAGE] Using external 24LC64");
+    }
+    #else
+    Serial.println("[STORAGE] Using internal ESP32 flash EEPROM");
+    #endif
+
+    // Load display preferences before the first OLED update.
+    loadControllerSettings();
 
     // Initialize pins
     pinMode(4, OUTPUT);
     pinMode(33, OUTPUT);
+    pinMode(FACTORY_RESET_BUTTON_PIN, INPUT_PULLUP);
     digitalWrite(4, LOW);
     digitalWrite(33, ledStatus);
 
     // Initialize OLED display
-    if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    if(!display.begin(SSD1306_SWITCHCAPVCC, OLED_I2C_ADDRESS)) {
         Serial.println(F("SSD1306 allocation failed"));
         for(;;); // Don't proceed, loop forever
     }
-    display.ssd1306_command(SSD1306_SETCONTRAST);
-    display.ssd1306_command(oledBrightness);
-    display.dim(!oledEnabled);
+    applyOledSettings();
     display.clearDisplay();
 
     display.setTextSize(2);             // Normal 1:1 pixel scale
@@ -116,7 +155,6 @@ void setup()
 
     // Load saved admin password (or set MAC-derived default on first boot)
     loadAdminPasswordFromEEPROM();
-    loadControllerSettings();
 
     // Load saved devices and restore GPIO states
     loadDevicesFromEEPROM();
@@ -134,6 +172,7 @@ void setup()
 
 void loop()
 {
+    checkFactoryResetButton();
     if (isAPMode) {
         dnsServer.processNextRequest();
     }
@@ -141,7 +180,7 @@ void loop()
     // same task that called EEPROM.begin(), which is this one (the Arduino main task).
     // The httpd FreeRTOS task only writes to the RAM buffer and sets this flag.
     if (eepromDirty) {
-        EEPROM.commit();
+        storageCommit();
         eepromDirty = false;
     }
     if (rebootScheduled && millis() >= rebootAt) {
@@ -155,9 +194,66 @@ void scheduleReboot() {
     rebootScheduled = true;
 }
 
+void checkFactoryResetButton() {
+    bool buttonPressed = digitalRead(FACTORY_RESET_BUTTON_PIN) == LOW;
+
+    if (!buttonPressed) {
+        factoryResetButtonPressedAt = 0;
+        factoryResetButtonHandled = false;
+        return;
+    }
+
+    if (factoryResetButtonHandled || rebootScheduled) return;
+
+    if (factoryResetButtonPressedAt == 0) {
+        factoryResetButtonPressedAt = millis();
+        Serial.println("Factory reset button pressed; hold for 10 seconds.");
+        return;
+    }
+
+    if (millis() - factoryResetButtonPressedAt >= FACTORY_RESET_HOLD_TIME) {
+        factoryResetButtonHandled = true;
+        Serial.println("Factory reset button held for 10 seconds; resetting.");
+        factoryResetSettings();
+        scheduleReboot();
+    }
+}
+
 // Returns true if EEPROM has been written by this firmware at least once
 bool eepromIsValid() {
-    return EEPROM.read(EEPROM_MAGIC_ADDR) == EEPROM_MAGIC_BYTE;
+    return storageRead(EEPROM_MAGIC_ADDR) == EEPROM_MAGIC_BYTE;
+}
+
+uint8_t storageRead(int address) {
+    #if CFG_STORAGE_EXTERNAL
+    Wire.beginTransmission(EXTERNAL_EEPROM_I2C_ADDRESS);
+    Wire.write((uint8_t)(address >> 8));
+    Wire.write((uint8_t)(address & 0xFF));
+    if (Wire.endTransmission() != 0 || Wire.requestFrom(EXTERNAL_EEPROM_I2C_ADDRESS, 1) != 1)
+        return 0xFF;
+    return Wire.read();
+    #else
+    return EEPROM.read(address);
+    #endif
+}
+
+void storageWrite(int address, uint8_t value) {
+    #if CFG_STORAGE_EXTERNAL
+    Wire.beginTransmission(EXTERNAL_EEPROM_I2C_ADDRESS);
+    Wire.write((uint8_t)(address >> 8));
+    Wire.write((uint8_t)(address & 0xFF));
+    Wire.write(value);
+    Wire.endTransmission();
+    delay(5);
+    #else
+    EEPROM.write(address, value);
+    #endif
+}
+
+void storageCommit() {
+    #if !CFG_STORAGE_EXTERNAL
+    EEPROM.commit();
+    #endif
 }
 
 // Function to read WiFi credentials from EEPROM
@@ -166,8 +262,9 @@ String readStringFromEEPROM(int addr, int maxLength) {
     String data = "";
     char c;
     for (int i = 0; i < maxLength; i++) {
-        c = EEPROM.read(addr + i);
-        if (c == '\0') break;
+        uint8_t raw = storageRead(addr + i);
+        if (raw == 0x00 || raw == 0xFF) break;
+        c = (char)raw;
         data += c;
     }
     return data;
@@ -177,33 +274,33 @@ String readStringFromEEPROM(int addr, int maxLength) {
 void writeStringToEEPROM(int addr, String data, int maxLength) {
     for (int i = 0; i < maxLength; i++) {
         if (i < data.length()) {
-            EEPROM.write(addr + i, data[i]);
+            storageWrite(addr + i, data[i]);
         } else {
-            EEPROM.write(addr + i, '\0');
+            storageWrite(addr + i, '\0');
             break;
         }
     }
-    EEPROM.write(EEPROM_MAGIC_ADDR, EEPROM_MAGIC_BYTE);
+    storageWrite(EEPROM_MAGIC_ADDR, EEPROM_MAGIC_BYTE);
     eepromDirty = true;  // committed from loop() in the main task
 }
 
 // Function to attempt WiFi connection
 bool connectToWiFi() {
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setCursor(0, 0);
-    display.println("Checking saved WiFi...");
-    display.display();
-
     // Read saved credentials
     String ssid = readStringFromEEPROM(SSID_ADDR, MAX_SSID_LENGTH);
     String password = readStringFromEEPROM(PASS_ADDR, MAX_PASS_LENGTH);
 
     if (ssid.length() == 0) {
-        Serial.println("No saved WiFi credentials.");
+        Serial.println("No saved WiFi SSID; starting AP mode.");
         return false;
     }
     Serial.printf("Trying saved WiFi: %s\r\n", ssid.c_str());
+
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setCursor(0, 0);
+    display.println("Checking saved WiFi...");
+    display.display();
 
     display.clearDisplay();
     display.setCursor(0, 0);
@@ -282,20 +379,25 @@ void startAPMode() {
 
 void loadDevicesFromEEPROM() {
     Serial.printf("[EEPROM] magic=0x%02X count_addr=%d count=0x%02X\r\n",
-                  EEPROM.read(EEPROM_MAGIC_ADDR),
+                  storageRead(EEPROM_MAGIC_ADDR),
                   DEVICE_COUNT_ADDR,
-                  EEPROM.read(DEVICE_COUNT_ADDR));
+                  storageRead(DEVICE_COUNT_ADDR));
 
     if (!eepromIsValid()) { deviceCount = 0; Serial.println("[EEPROM] invalid magic — skipping device load"); return; }
-    deviceCount = EEPROM.read(DEVICE_COUNT_ADDR);
-    if (deviceCount > MAX_DEVICES) { Serial.printf("[EEPROM] count %d > max %d — reset\r\n", deviceCount, MAX_DEVICES); deviceCount = 0; }
+    uint8_t storedDeviceCount = storageRead(DEVICE_COUNT_ADDR);
+    if (storedDeviceCount == 0xFF || storedDeviceCount > MAX_DEVICES) {
+        Serial.printf("[EEPROM] count %d invalid for max %d — reset\r\n", storedDeviceCount, MAX_DEVICES);
+        deviceCount = 0;
+    } else {
+        deviceCount = storedDeviceCount;
+    }
     for (uint8_t i = 0; i < deviceCount; i++) {
         int base = DEVICE_BASE_ADDR + i * DEVICE_SLOT_SIZE;
         for (int j = 0; j < DEVICE_NAME_LEN; j++)
-            devices[i].name[j] = EEPROM.read(base + j);
+            devices[i].name[j] = storageRead(base + j);
         devices[i].name[DEVICE_NAME_LEN - 1] = '\0';
-        devices[i].pin   = EEPROM.read(base + DEVICE_NAME_LEN);
-        devices[i].state = EEPROM.read(base + DEVICE_NAME_LEN + 1);
+        devices[i].pin   = storageRead(base + DEVICE_NAME_LEN);
+        devices[i].state = storageRead(base + DEVICE_NAME_LEN + 1);
         pinMode(devices[i].pin, OUTPUT);
         digitalWrite(devices[i].pin, devices[i].state ? HIGH : LOW);
         Serial.printf("[EEPROM] device[%d]: name=%s pin=%d state=%d\r\n",
@@ -304,15 +406,15 @@ void loadDevicesFromEEPROM() {
 }
 
 void saveDevicesToEEPROM() {
-    EEPROM.write(DEVICE_COUNT_ADDR, deviceCount);
+    storageWrite(DEVICE_COUNT_ADDR, deviceCount);
     for (uint8_t i = 0; i < deviceCount; i++) {
         int base = DEVICE_BASE_ADDR + i * DEVICE_SLOT_SIZE;
         for (int j = 0; j < DEVICE_NAME_LEN; j++)
-            EEPROM.write(base + j, devices[i].name[j]);
-        EEPROM.write(base + DEVICE_NAME_LEN,     devices[i].pin);
-        EEPROM.write(base + DEVICE_NAME_LEN + 1, devices[i].state);
+            storageWrite(base + j, devices[i].name[j]);
+        storageWrite(base + DEVICE_NAME_LEN,     devices[i].pin);
+        storageWrite(base + DEVICE_NAME_LEN + 1, devices[i].state);
     }
-    EEPROM.write(EEPROM_MAGIC_ADDR, EEPROM_MAGIC_BYTE);
+    storageWrite(EEPROM_MAGIC_ADDR, EEPROM_MAGIC_BYTE);
     // Do NOT call EEPROM.commit() here — this runs in the httpd FreeRTOS task,
     // which does not own the NVS handle opened by EEPROM.begin() in setup().
     // Calling commit() from the wrong task silently does nothing on ESP32 Arduino.
@@ -352,9 +454,10 @@ void updateOledDeviceStatus() {
 void loadAdminPasswordFromEEPROM() {
     if (eepromIsValid()) {
         for (int i = 0; i < ADMIN_PASS_LEN; i++)
-            adminPassword[i] = (char)EEPROM.read(ADMIN_PASS_ADDR + i);
+            adminPassword[i] = (char)storageRead(ADMIN_PASS_ADDR + i);
         adminPassword[ADMIN_PASS_LEN] = '\0';
         if (adminPassword[0] != '\0') {
+            adminPasswordChangeRequired = storageRead(ADMIN_PASSWORD_SET_ADDR) != 0xA5;
             Serial.println("Admin password loaded from EEPROM");
             return;
         }
@@ -370,16 +473,20 @@ void loadAdminPasswordFromEEPROM() {
     mac[5] = (chipId >>  0) & 0xFF;
     snprintf(adminPassword, sizeof(adminPassword),
              "%02X%02X%02X%02X", mac[2], mac[3], mac[4], mac[5]);
-    saveAdminPassword(adminPassword);
+    saveAdminPassword(adminPassword, false);
     Serial.printf("Default admin password set from MAC: %s\r\n", adminPassword);
 }
 
-void saveAdminPassword(const char* newPassword) {
+void saveAdminPassword(const char* newPassword, bool markConfigured) {
     strncpy(adminPassword, newPassword, ADMIN_PASS_LEN);
     adminPassword[ADMIN_PASS_LEN] = '\0';
     for (int i = 0; i < ADMIN_PASS_LEN; i++)
-        EEPROM.write(ADMIN_PASS_ADDR + i, (uint8_t)adminPassword[i]);
-    EEPROM.write(EEPROM_MAGIC_ADDR, EEPROM_MAGIC_BYTE);
+        storageWrite(ADMIN_PASS_ADDR + i, (uint8_t)adminPassword[i]);
+    storageWrite(EEPROM_MAGIC_ADDR, EEPROM_MAGIC_BYTE);
+    if (markConfigured) {
+        storageWrite(ADMIN_PASSWORD_SET_ADDR, 0xA5);
+        adminPasswordChangeRequired = false;
+    }
     // Same rule: if called from httpd task, only set dirty flag.
     // If called from setup() (first boot), commit directly — setup() IS the main task.
     eepromDirty = true;
@@ -395,12 +502,12 @@ bool checkAdminPassword(const char* attempt) {
 void loadControllerSettings() {
     if (eepromIsValid()) {
         for (int i = 0; i < CONTROLLER_NAME_LEN; i++)
-            controllerName[i] = (char)EEPROM.read(CONTROLLER_NAME_ADDR + i);
+            controllerName[i] = (char)storageRead(CONTROLLER_NAME_ADDR + i);
         controllerName[CONTROLLER_NAME_LEN - 1] = '\0';
-        uint16_t storedMinutes = EEPROM.read(LOGOUT_MINUTES_ADDR) |
-                                 ((uint16_t)EEPROM.read(LOGOUT_MINUTES_ADDR + 1) << 8);
-        uint8_t storedBrightness = EEPROM.read(OLED_BRIGHTNESS_ADDR);
-        uint8_t storedEnabled = EEPROM.read(OLED_ENABLED_ADDR);
+        uint16_t storedMinutes = storageRead(LOGOUT_MINUTES_ADDR) |
+                     ((uint16_t)storageRead(LOGOUT_MINUTES_ADDR + 1) << 8);
+        uint8_t storedBrightness = storageRead(OLED_BRIGHTNESS_ADDR);
+        uint8_t storedEnabled = storageRead(OLED_ENABLED_ADDR);
         if (controllerName[0] != '\0' && storedMinutes >= 1 && storedMinutes <= 1440) {
             logoutMinutes = storedMinutes;
             oledBrightness = storedBrightness == 0 ? DEFAULT_OLED_BRIGHTNESS : storedBrightness;
@@ -416,26 +523,34 @@ void saveControllerSettings(const char* name, uint16_t minutes) {
     controllerName[CONTROLLER_NAME_LEN - 1] = '\0';
     logoutMinutes = minutes;
     for (int i = 0; i < CONTROLLER_NAME_LEN; i++)
-        EEPROM.write(CONTROLLER_NAME_ADDR + i, (uint8_t)controllerName[i]);
-    EEPROM.write(LOGOUT_MINUTES_ADDR, (uint8_t)(minutes & 0xFF));
-    EEPROM.write(LOGOUT_MINUTES_ADDR + 1, (uint8_t)(minutes >> 8));
-    EEPROM.write(EEPROM_MAGIC_ADDR, EEPROM_MAGIC_BYTE);
+        storageWrite(CONTROLLER_NAME_ADDR + i, (uint8_t)controllerName[i]);
+    storageWrite(LOGOUT_MINUTES_ADDR, (uint8_t)(minutes & 0xFF));
+    storageWrite(LOGOUT_MINUTES_ADDR + 1, (uint8_t)(minutes >> 8));
+    storageWrite(EEPROM_MAGIC_ADDR, EEPROM_MAGIC_BYTE);
     eepromDirty = true;
 }
 
 void saveOledSettings(uint8_t brightness, bool enabled) {
     oledBrightness = brightness;
     oledEnabled = enabled;
-    display.ssd1306_command(SSD1306_SETCONTRAST);
-    display.ssd1306_command(brightness);
-    display.dim(!enabled);
-    EEPROM.write(OLED_BRIGHTNESS_ADDR, brightness);
-    EEPROM.write(OLED_ENABLED_ADDR, enabled ? 1 : 0);
+    applyOledSettings();
+    storageWrite(OLED_BRIGHTNESS_ADDR, brightness);
+    storageWrite(OLED_ENABLED_ADDR, enabled ? 1 : 0);
     eepromDirty = true;
 }
 
+void applyOledSettings() {
+    display.dim(!oledEnabled);
+    if (oledEnabled) {
+        display.ssd1306_command(SSD1306_SETCONTRAST);
+        display.ssd1306_command(oledBrightness);
+    }
+}
+
 void factoryResetSettings() {
-    for (int i = 0; i < EEPROM_SIZE; i++) EEPROM.write(i, 0);
-    EEPROM.write(EEPROM_MAGIC_ADDR, EEPROM_MAGIC_BYTE);
+    for (int i = 0; i < EEPROM_SIZE; i++) storageWrite(i, 0);
+    deviceCount = 0;
+    saveControllerSettings("Home Controller", DEFAULT_LOGOUT_MINUTES);
+    saveOledSettings(DEFAULT_OLED_BRIGHTNESS, true);
     eepromDirty = true;
 }

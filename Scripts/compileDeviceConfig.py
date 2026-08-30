@@ -20,6 +20,9 @@ def compileDeviceConfig():
         data = yaml.safe_load(f)
 
     maxDevices = int(data.get("maxDevices", 16))
+    storageBackend = str(data.get("storageBackend", "internal")).lower()
+    if storageBackend not in ("internal", "external"):
+        raise ValueError("storageBackend must be 'internal' or 'external'")
     highVoltagePins = data.get("highVoltageGpioPins", [])
     lowVoltagePins  = data.get("lowVoltageGpioPins", [])
 
@@ -60,6 +63,10 @@ def compileDeviceConfig():
 
 // Maximum number of devices the user is allowed to add
 #define CFG_MAX_DEVICES {maxDevices}
+
+#define CFG_STORAGE_EXTERNAL {1 if storageBackend == 'external' else 0}
+#define CFG_EXTERNAL_EEPROM_ADDRESS 0x50
+#define CFG_EXTERNAL_EEPROM_SIZE 8192
 
 // GPIO pins grouped by voltage category
 #define CFG_HIGH_VOLTAGE_PIN_COUNT {highVoltagePinCount}

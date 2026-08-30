@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Home Controller</title>
-    <link rel="stylesheet" href="/Css/style.css?v=13">
+    <link rel="stylesheet" href="/Css/style.css?v=15">
     <script>
         (function(){
             var t=localStorage.getItem('theme');
@@ -110,6 +110,44 @@
         </div>
     </div>
 
+    <div id="initialPasswordModal" class="modal-backdrop" style="display:none;">
+        <div class="modal-box">
+            <h3>Set Admin Password</h3>
+            <p style="color:var(--text-muted);font-size:14px;margin:0 0 20px;">
+                Set a new admin password to continue.
+            </p>
+            <div id="initialPasswordAlert"></div>
+            <div class="form-group">
+                <label for="initialPassword">New Admin Password</label>
+                <div class="input-with-toggle">
+                    <input type="password" id="initialPassword" class="form-control" placeholder="6 to 32 characters" autocomplete="new-password">
+                    <button type="button" class="btn-pw-toggle" id="toggleInitialPassword" title="Show/hide password">&#128065;</button>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-primary" id="saveInitialPasswordBtn">Save Password</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Factory reset modal ───────────────────────────────────── -->
+    <div id="factoryResetModal" class="modal-backdrop" style="display:none;">
+        <div class="modal-box">
+            <h3>Confirm Factory Reset</h3>
+            <p style="color:var(--text-muted);font-size:14px;margin:0 0 20px;">
+                Enter the admin password to erase all settings and devices.
+            </p>
+            <div class="form-group">
+                <label for="factoryResetPassword">Admin Password</label>
+                <input type="password" id="factoryResetPassword" class="form-control" placeholder="Admin password">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-danger" id="confirmFactoryResetBtn">Reset</button>
+                <button class="btn btn-cancel" id="cancelFactoryResetBtn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ── Reboot confirm modal ───────────────────────────────────── -->
     <div id="rebootModal" class="modal-backdrop" style="display:none;">
         <div class="modal-box">
@@ -124,7 +162,7 @@
         </div>
     </div>
 
-    <script src="/Js/app.js?v=14"></script>
+    <script src="/Js/app.js?v=16"></script>
     <script>
         if (!localStorage.getItem('authToken')) {
             window.location.replace('/login');
@@ -179,6 +217,10 @@
             document.querySelectorAll('.controller-name').forEach(el => el.textContent = result.data.controllerName);
             document.title = result.data.controllerName;
             localStorage.setItem('logoutMinutes', String(result.data.logoutMinutes));
+            if (result.data.mustChangePassword) {
+                document.getElementById('initialPasswordModal').style.display = 'flex';
+                document.getElementById('initialPassword').focus();
+            }
         })();
 
         async function loadFragment(url) {
@@ -297,6 +339,32 @@
                 window.location.replace('/login');
             } else {
                 Utils.showAlert((result.data && result.data.message) || 'Failed', 'danger', 'modalAlertContainer');
+            }
+        });
+
+        document.getElementById('toggleInitialPassword').addEventListener('click', function() {
+            const input = document.getElementById('initialPassword');
+            const hidden = input.type === 'password';
+            input.type = hidden ? 'text' : 'password';
+            this.textContent = hidden ? '\uD83D\uDE48' : '\uD83D\uDC41';
+        });
+        document.getElementById('saveInitialPasswordBtn').addEventListener('click', async function() {
+            const password = document.getElementById('initialPassword').value;
+            const alert = document.getElementById('initialPasswordAlert');
+            if (password.length < 6 || password.length > 32) {
+                alert.innerHTML = '<div class="alert alert-danger">Password must be 6 to 32 characters</div>';
+                return;
+            }
+            this.disabled = true;
+            this.textContent = 'Saving...';
+            const result = await api.setInitialPassword(password);
+            this.disabled = false;
+            this.textContent = 'Save Password';
+            if (result.success && result.data && result.data.success) {
+                document.getElementById('initialPasswordModal').style.display = 'none';
+            } else {
+                alert.innerHTML = '<div class="alert alert-danger">' +
+                    ((result.data && result.data.message) || 'Failed to set password') + '</div>';
             }
         });
 

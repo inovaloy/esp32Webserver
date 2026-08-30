@@ -16,7 +16,8 @@ extern uint8_t      deviceCount;
 extern void         saveDevicesToEEPROM();
 extern void         updateOledDeviceStatus();
 extern char         adminPassword[];
-extern void         saveAdminPassword(const char* newPassword);
+extern void         saveAdminPassword(const char* newPassword, bool markConfigured);
+extern bool         adminPasswordChangeRequired;
 extern bool         checkAdminPassword(const char* attempt);
 extern volatile bool eepromDirty;   // committed from main task loop()
 extern char         controllerName[];
@@ -27,6 +28,8 @@ extern bool          oledEnabled;
 extern void          saveOledSettings(uint8_t brightness, bool enabled);
 extern void          factoryResetSettings();
 extern void          scheduleReboot();
+extern uint8_t        storageRead(int address);
+extern void           storageWrite(int address, uint8_t value);
 
 // ── Session token (single slot, RAM only — cleared on reboot) ─────────────
 #define SESSION_TOKEN_LEN 32
@@ -107,6 +110,7 @@ char* apiLoginHandlerHook(httpd_req_t *req) {
                 sessionLastActivity = millis();
                 cJSON_AddBoolToObject(response, "success", true);
                 cJSON_AddStringToObject(response, "token", sessionToken);
+                cJSON_AddBoolToObject(response, "mustChangePassword", adminPasswordChangeRequired);
             } else {
                 delay(500);
                 cJSON_AddBoolToObject(response, "success", false);
@@ -165,7 +169,7 @@ char* apiAuthChangePasswordHandlerHook(httpd_req_t *req) {
                 cJSON_AddBoolToObject(response, "success", false);
                 cJSON_AddStringToObject(response, "message", "New password must be at least 6 characters");
             } else {
-                saveAdminPassword(new_j->valuestring);
+                saveAdminPassword(new_j->valuestring, true);
                 memset(sessionToken, 0, sizeof(sessionToken));
                 sessionLastActivity = 0;
                 cJSON_AddBoolToObject(response, "success", true);
@@ -180,6 +184,33 @@ char* apiAuthChangePasswordHandlerHook(httpd_req_t *req) {
     return out;
 }
 
+char* apiAuthSetInitialPasswordHandlerHook(httpd_req_t *req) {
+    if (!isAuthorised(req)) { sendUnauthorised(req); return nullptr; }
+
+    char* jsonData = getContentFromReq(req);
+    cJSON *json = jsonData ? cJSON_Parse(jsonData) : NULL;
+    free(jsonData);
+    cJSON *response = cJSON_CreateObject();
+    cJSON *password = json ? cJSON_GetObjectItem(json, "password") : NULL;
+
+    if (!adminPasswordChangeRequired) {
+        cJSON_AddBoolToObject(response, "success", false);
+        cJSON_AddStringToObject(response, "message", "Initial password is already configured");
+    } else if (!cJSON_IsString(password) || strlen(password->valuestring) < 6 ||
+               strlen(password->valuestring) > ADMIN_PASS_LEN) {
+        cJSON_AddBoolToObject(response, "success", false);
+        cJSON_AddStringToObject(response, "message", "Password must be 6 to 32 characters");
+    } else {
+        saveAdminPassword(password->valuestring, true);
+        cJSON_AddBoolToObject(response, "success", true);
+        cJSON_AddStringToObject(response, "message", "Admin password configured");
+    }
+    if (json) cJSON_Delete(json);
+    char *out = cJSON_Print(response);
+    cJSON_Delete(response);
+    return out;
+}
+
 // GET /api/settings
 char* apiSettingsHandlerHook(httpd_req_t *req) {
     if (!isAuthorised(req)) { sendUnauthorised(req); return nullptr; }
@@ -189,7 +220,8 @@ char* apiSettingsHandlerHook(httpd_req_t *req) {
     cJSON_AddNumberToObject(response, "logoutMinutes", logoutMinutes);
     cJSON_AddNumberToObject(response, "oledBrightness", oledBrightness);
     cJSON_AddBoolToObject(response, "oledEnabled", oledEnabled);
-    cJSON_AddStringToObject(response, "firmwareVersion", "1.0.0");
+    cJSON_AddBoolToObject(response, "mustChangePassword", adminPasswordChangeRequired);
+    cJSON_AddStringToObject(response, "firmwareVersion", "1.0.1");
     char *out = cJSON_Print(response);
     cJSON_Delete(response);
     return out;
@@ -314,11 +346,30 @@ char* apiSettingsRestoreHandlerHook(httpd_req_t *req) {
 
 char* apiSettingsFactoryResetHandlerHook(httpd_req_t *req) {
     if (!isAuthorised(req)) { sendUnauthorised(req); return nullptr; }
-    factoryResetSettings();
+    char* jsonData = getContentFromReq(req);
+    cJSON *json = jsonData ? cJSON_Parse(jsonData) : NULL;
+    free(jsonData);
     cJSON *response = cJSON_CreateObject();
-    cJSON_AddBoolToObject(response, "success", true);
-    cJSON_AddStringToObject(response, "message", "Factory reset; rebooting");
-    scheduleReboot();
+    cJSON *password = json ? cJSON_GetObjectItem(json, "password") : NULL;
+    char attempt[ADMIN_PASS_LEN + 1] = {0};
+
+    if (!cJSON_IsString(password)) {
+        cJSON_AddBoolToObject(response, "success", false);
+        cJSON_AddStringToObject(response, "message", "Admin password required");
+    } else {
+        strncpy(attempt, password->valuestring, ADMIN_PASS_LEN);
+        if (!checkAdminPassword(attempt)) {
+            delay(500);
+            cJSON_AddBoolToObject(response, "success", false);
+            cJSON_AddStringToObject(response, "message", "Incorrect admin password");
+        } else {
+            factoryResetSettings();
+            cJSON_AddBoolToObject(response, "success", true);
+            cJSON_AddStringToObject(response, "message", "Factory reset; rebooting");
+            scheduleReboot();
+        }
+    }
+    if (json) cJSON_Delete(json);
     char *out = cJSON_Print(response);
     cJSON_Delete(response);
     return out;
@@ -388,10 +439,10 @@ char* apiWifiConnectHandlerHook(httpd_req_t *req) {
                 delay(500);
             if (WiFi.status() == WL_CONNECTED) {
                 for (int i = 0; i < 32; i++)
-                    EEPROM.write(i, i < (int)ssid.length() ? ssid[i] : 0);
+                    storageWrite(i, i < (int)ssid.length() ? ssid[i] : 0);
                 for (int i = 0; i < 64; i++)
-                    EEPROM.write(100 + i, i < (int)pass.length() ? pass[i] : 0);
-                EEPROM.write(200, 0xA5);
+                    storageWrite(100 + i, i < (int)pass.length() ? pass[i] : 0);
+                storageWrite(200, 0xA5);
                 eepromDirty = true;  // committed from loop() in the main task
                 cJSON_AddBoolToObject(response, "success", true);
                 cJSON_AddStringToObject(response, "message", "Connected");

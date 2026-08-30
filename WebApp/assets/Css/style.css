@@ -263,7 +263,7 @@ a:hover { text-decoration: underline; }
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 15%, transparent);
 }
 
-.settings-page { max-width: 560px; }
+.settings-page { width: 100%; max-width: none; }
 .page-heading h2 { margin: 0 0 5px; font-size: 20px; }
 .page-heading p { margin: 0 0 20px; color: var(--text-muted); font-size: 14px; }
 .settings-panel {

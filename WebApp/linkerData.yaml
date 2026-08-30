@@ -85,6 +85,10 @@ contentTypes: &contentTypes
     rtnType: *rtnJSON
     reqType: *httpPOST
 
+"/api/auth/set-initial-password" :
+    rtnType: *rtnJSON
+    reqType: *httpPOST
+
 "/api/wifi/status" :
     rtnType: *rtnJSON
     reqType: *httpGET

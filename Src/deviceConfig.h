@@ -15,6 +15,7 @@
 // Admin password storage
 #define ADMIN_PASS_ADDR   164
 #define ADMIN_PASS_LEN    32
+#define ADMIN_PASSWORD_SET_ADDR 420
 
 // Maximum devices driven by deviceConfig.yaml (via autoGenDeviceConfig.h)
 #define MAX_DEVICES       CFG_MAX_DEVICES
