@@ -1,6 +1,8 @@
 import re
 import yaml
 import os
+import rjsmin
+import rcssmin
 
 from common import *
 
@@ -20,35 +22,13 @@ def convertToCamelCase(filename, separator="."):
 
 
 def minifyCss(cssContent):
-    """Minify CSS by removing unnecessary whitespace and comments"""
-    # Remove CSS comments
-    cssContent = re.sub(r'/\*.*?\*/', '', cssContent, flags=re.DOTALL)
-    # Remove unnecessary whitespace around CSS syntax
-    cssContent = re.sub(r'\s*([{}:;,])\s*', r'\1', cssContent)
-    # Remove multiple whitespace and newlines
-    cssContent = re.sub(r'\s+', ' ', cssContent)
-    # Remove leading and trailing whitespace
-    return cssContent.strip()
+    """Minify CSS using rcssmin — handles @media, variables, and all valid CSS."""
+    return rcssmin.cssmin(cssContent)
 
 
 def minifyJavaScript(jsContent):
-    """Minify JavaScript by removing unnecessary whitespace and comments"""
-    # Remove single-line comments (but be careful with // in strings and URLs)
-    jsContent = re.sub(r'(?<!:)//(?!/).*?(?=\n|$)', '', jsContent)
-    # Remove multi-line comments
-    jsContent = re.sub(r'/\*.*?\*/', '', jsContent, flags=re.DOTALL)
-    # Remove leading and trailing whitespace from each line
-    lines = jsContent.split('\n')
-    lines = [line.strip() for line in lines if line.strip()]
-    # Join lines with single space
-    jsContent = ' '.join(lines)
-    # Remove excessive whitespace
-    jsContent = re.sub(r'\s+', ' ', jsContent)
-    # Remove spaces around specific punctuation where it's safe
-    jsContent = re.sub(r'\s*([{}();,])\s*', r'\1', jsContent)
-    jsContent = re.sub(r'\s*:\s*', r':', jsContent)
-    jsContent = re.sub(r'\s*=\s*', r'=', jsContent)
-    return jsContent.strip()
+    """Minify JavaScript using rjsmin — template-literal and regex safe."""
+    return rjsmin.jsmin(jsContent)
 
 
 def readLinkerData(linkerDataPath):

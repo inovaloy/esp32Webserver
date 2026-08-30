@@ -1,9 +1,185 @@
-<html>
-    <head>
-        <title>ESP32 Webserver Dashboard</title>
-    </head>
-    <body>
-        <h1 style="text-align: center;">ESP32 Webserver Dashboard</h1>
-        <a href="/">Index</a>
-    </body>
-</html>
+<!-- Dashboard fragment — injected into #app by base.html SPA router -->
+<div id="deviceGrid" class="device-grid">
+    <div class="loading">
+        <div class="loading-spinner"></div>
+        <div>Loading devices...</div>
+    </div>
+</div>
+
+<!-- Add device section -->
+<div class="add-device-section">
+    <button class="btn btn-add" id="toggleAddForm">+ Add Device</button>
+    <div id="addDeviceForm" class="add-form" style="display:none;">
+        <h3>Add New Device</h3>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Device Name</label>
+                <input type="text" id="newDeviceName" class="form-control"
+                       placeholder="e.g. Bedroom Lamp" maxlength="15">
+            </div>
+            <div class="form-group">
+                <label>Voltage</label>
+                <select id="newDeviceVoltage" class="form-control">
+                    <option value="high">High Voltage</option>
+                    <option value="low">Low Voltage</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>GPIO Pin</label>
+                <select id="newDevicePin" class="form-control">
+                    <option value="">Loading pins...</option>
+                </select>
+            </div>
+        </div>
+        <button class="btn btn-primary" id="addDeviceBtn">Add Device</button>
+    </div>
+</div>
+
+<script>
+    // ── Init ──────────────────────────────────────────────────────────
+    (async function initDashboard() {
+        await loadDeviceConfig();
+        await renderDevices();
+    })();
+
+    // ── Device config (max devices + available pins) ───────────────────
+    async function loadDeviceConfig() {
+        const result = await api.getDeviceConfig();
+        if (!result.success) return;
+
+        const cfg        = result.data;
+        const atMax      = cfg.currentDevices >= cfg.maxDevices;
+        const addBtn     = document.getElementById('toggleAddForm');
+        const pinSelect  = document.getElementById('newDevicePin');
+        const voltageSelect = document.getElementById('newDeviceVoltage');
+
+        // Hide or show the Add button based on capacity
+        if (atMax) {
+            addBtn.disabled = true;
+            addBtn.textContent = '+ Add Device (limit reached)';
+            addBtn.title = `Maximum of ${cfg.maxDevices} devices reached`;
+        } else {
+            addBtn.disabled = false;
+            addBtn.textContent = '+ Add Device';
+            addBtn.title = '';
+        }
+
+        populateAvailablePins(cfg, voltageSelect.value);
+    }
+
+    function populateAvailablePins(cfg, voltage) {
+        const pinSelect = document.getElementById('newDevicePin');
+        const pins = voltage === 'high' ? cfg.availableHighVoltagePins : cfg.availableLowVoltagePins;
+        if (pins.length === 0) {
+            pinSelect.innerHTML = '<option value="">No pins available</option>';
+        } else {
+            pinSelect.innerHTML = pins
+                .map(p => `<option value="${p}">GPIO ${p}</option>`)
+                .join('');
+        }
+    }
+
+    // ── Device rendering ──────────────────────────────────────────────
+    async function renderDevices() {
+        const result = await api.getDevices();
+        const grid   = document.getElementById('deviceGrid');
+        if (!result.success) {
+            grid.innerHTML = '<div class="alert alert-danger">Failed to load devices</div>';
+            return;
+        }
+        const devices = result.data.devices;
+        const config = await api.getDeviceConfig();
+        const highPins = config.success ? config.data.highVoltagePins : [];
+        const highDevices = devices.filter(d => highPins.includes(d.pin));
+        const lowDevices = devices.filter(d => !highPins.includes(d.pin));
+        grid.innerHTML = renderVoltageSection('High Voltage Devices', highDevices)
+            + renderVoltageSection('Low Voltage Devices', lowDevices);
+    }
+
+    function renderVoltageSection(title, devices) {
+        const cards = devices.length === 0
+            ? '<div class="voltage-empty">No devices</div>'
+            : devices.map(d => `
+                <div class="device-card ${d.state ? 'device-on' : ''}" id="card-${d.index}">
+                    <div class="device-info">
+                        <div class="device-name">${escHtml(d.name)}</div>
+                        <div class="device-pin">GPIO ${d.pin}</div>
+                    </div>
+                    <div class="device-controls">
+                        <label class="toggle-switch">
+                            <input type="checkbox" ${d.state ? 'checked' : ''} onchange="toggleDevice(${d.index}, this.checked)">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <button class="btn-remove" onclick="removeDevice(${d.index})" title="Remove">&#10005;</button>
+                    </div>
+                </div>
+            `).join('');
+        return `<section class="voltage-section"><h3>${title}</h3><div class="device-grid">${cards}</div></section>`;
+    }
+
+    async function toggleDevice(index, state) {
+        // Optimistic UI: apply the new state immediately so the card
+        // background and name colour change in sync with the toggle knob.
+        const card = document.getElementById('card-' + index);
+        if (card) card.classList.toggle('device-on', state);
+
+        const result = await api.toggleDevice(index, state);
+        if (!result.success || !result.data.success) {
+            // Revert the optimistic update on failure
+            if (card) card.classList.toggle('device-on', !state);
+            const cb = card && card.querySelector('input[type="checkbox"]');
+            if (cb) cb.checked = !state;
+            Utils.showAlert('Failed to toggle device', 'danger');
+        }
+    }
+
+    async function removeDevice(index) {
+        if (!confirm('Remove this device?')) return;
+        const result = await api.removeDevice(index);
+        if (result.success && result.data.success) {
+            await renderDevices();
+            await loadDeviceConfig();   // refresh available pins after removal
+        } else {
+            Utils.showAlert('Failed to remove device', 'danger');
+        }
+    }
+
+    document.getElementById('toggleAddForm').addEventListener('click', function () {
+        const form = document.getElementById('addDeviceForm');
+        const show = form.style.display === 'none';
+        form.style.display = show ? 'block' : 'none';
+        this.textContent = show ? '✕ Cancel' : '+ Add Device';
+    });
+
+    document.getElementById('newDeviceVoltage').addEventListener('change', async function () {
+        const result = await api.getDeviceConfig();
+        if (result.success) populateAvailablePins(result.data, this.value);
+    });
+
+    document.getElementById('addDeviceBtn').addEventListener('click', async function () {
+        const name = document.getElementById('newDeviceName').value.trim();
+        const voltage = document.getElementById('newDeviceVoltage').value;
+        const pinEl = document.getElementById('newDevicePin');
+        const pin  = parseInt(pinEl.value, 10);
+        if (!name) { Utils.showAlert('Device name is required', 'danger'); return; }
+        if (isNaN(pin)) { Utils.showAlert('Select a GPIO pin', 'danger'); return; }
+        this.disabled = true;
+        this.textContent = 'Adding...';
+        const result = await api.addDevice(name, pin, voltage);
+        this.disabled = false;
+        this.textContent = 'Add Device';
+        if (result.success && result.data.success) {
+            document.getElementById('newDeviceName').value = '';
+            document.getElementById('addDeviceForm').style.display = 'none';
+            document.getElementById('toggleAddForm').textContent = '+ Add Device';
+            await loadDeviceConfig();   // refresh available pins after add
+            await renderDevices();
+        } else {
+            Utils.showAlert(result.data && result.data.message || 'Failed to add device', 'danger');
+        }
+    });
+
+    function escHtml(s) {
+        return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+</script>

@@ -1,0 +1,24 @@
+# Device Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+# maxDevices: how many GPIO devices can be added (must be <= 16)
+#
+# highVoltageGpioPins: GPIO pins available for high voltage devices.
+# lowVoltageGpioPins: GPIO pins available for low voltage devices.
+# Once a pin is assigned to a device it disappears from the Add form.
+
+maxDevices: 8
+
+# storageBackend: internal (ESP32 flash emulation) or external (24LC64 at 0x50)
+storageBackend: external
+
+highVoltageGpioPins:
+  - 26
+  - 27
+  - 25
+
+lowVoltageGpioPins:
+  - 33
+  - 32
+  - 17
+  - 15
+  - 5

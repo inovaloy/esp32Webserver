@@ -7,9 +7,21 @@ Generates web server code that handles both HTML pages and static assets (CSS, J
 import os
 import io
 import shutil
+import subprocess
 
 from common import *
 from utility import *
+
+
+def getGitHash():
+    """Return short git hash, or 'dev' if not in a git repo"""
+    try:
+        return subprocess.check_output(
+            ['git', 'rev-parse', '--short', 'HEAD'],
+            stderr=subprocess.DEVNULL
+        ).decode().strip()
+    except Exception:
+        return 'dev'
 
 
 def createWebServerFiles():
@@ -152,8 +164,9 @@ httpd_handle_t webServerHttpd = NULL;
             generateHtmlHandler(cpp, page)
 
         # Generate asset handlers
+        gitHash = getGitHash()
         for asset in assets:
-            generateAssetHandler(cpp, asset)
+            generateAssetHandler(cpp, asset, gitHash)
 
         # Generate API handlers
         for endpoint in apiEndpoints:
@@ -191,7 +204,7 @@ static esp_err_t {handlerName}(httpd_req_t *req){{
 """)
 
 
-def generateAssetHandler(cpp, asset):
+def generateAssetHandler(cpp, asset, gitHash='dev'):
     """Generate handler for static asset"""
     handlerName = f"{convertToCamelCase(asset['fileName'])}Handler"
     arrayName = convertToCamelCase(asset['fileName'])
@@ -201,8 +214,8 @@ def generateAssetHandler(cpp, asset):
 static esp_err_t {handlerName}(httpd_req_t *req){{
     httpd_resp_set_type(req, "{asset['contentType']}");
     httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
-    httpd_resp_set_hdr(req, "Cache-Control", "public, max-age=31536000"); // Cache for 1 year
-    httpd_resp_set_hdr(req, "ETag", "\\"{arrayName}\\"");
+    httpd_resp_set_hdr(req, "Cache-Control", "public, max-age=31536000, immutable");
+    httpd_resp_set_hdr(req, "ETag", "\\"{gitHash}\\"");
     return sendLargeResponse(req, (const char *){arrayName}, {arrayLen});
 }}
 """)

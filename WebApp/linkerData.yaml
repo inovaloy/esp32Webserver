@@ -25,20 +25,8 @@ contentTypes: &contentTypes
 # These endpoints serve static HTML pages for the ESP32 web interface
 "/" :
     rtnType : *rtnHTML
-    fileName: "index.html"
-    macro   : "INDEX_HTML"
-    reqType : *httpGET
-
-"/home" :
-    rtnType : *rtnHTML
-    fileName: "home.html"
-    macro   : "HOME_HTML"
-    reqType : *httpGET
-
-"/dshbrd" :
-    rtnType : *rtnHTML
-    fileName: "dashboard.html"
-    macro   : "DASHBOARD_HTML"
+    fileName: "base.html"
+    macro   : "BASE_HTML"
     reqType : *httpGET
 
 "/login" :
@@ -47,16 +35,22 @@ contentTypes: &contentTypes
     macro   : "LOGIN_HTML"
     reqType : *httpGET
 
-"/logout" :
+"/page/dashboard" :
     rtnType : *rtnHTML
-    fileName: "logout.html"
-    macro   : "LOGOUT_HTML"
+    fileName: "dashboard.html"
+    macro   : "DASHBOARD_HTML"
     reqType : *httpGET
 
-"/wifi_config" :
+"/page/wifi" :
     rtnType : *rtnHTML
     fileName: "wifi_config.html"
     macro   : "WIFI_CONFIG_HTML"
+    reqType : *httpGET
+
+"/page/settings" :
+    rtnType : *rtnHTML
+    fileName: "settings.html"
+    macro   : "SETTINGS_HTML"
     reqType : *httpGET
 
 
@@ -76,21 +70,22 @@ contentTypes: &contentTypes
     contentType: *jsType
     reqType    : *httpGET
 
-"/Image/twoFlower.jpg" :
-    rtnType    : *rtnASSET
-    fileName   : "Image/twoFlower.jpg"
-    macro      : "TWO_FLOWER_JPG"
-    contentType: *jpgType
-    reqType    : *httpGET
-
 
 # REST API Endpoints - JSON data exchange for dynamic functionality
-# Backend services for user authentication and WiFi network management
+# Backend services for user authentication, WiFi management, and device control
 "/api/login" :
     rtnType: *rtnJSON
     reqType: *httpPOST
 
-"/api/register" :
+"/api/logout" :
+    rtnType: *rtnJSON
+    reqType: *httpPOST
+
+"/api/auth/change-password" :
+    rtnType: *rtnJSON
+    reqType: *httpPOST
+
+"/api/auth/set-initial-password" :
     rtnType: *rtnJSON
     reqType: *httpPOST
 
@@ -98,10 +93,54 @@ contentTypes: &contentTypes
     rtnType: *rtnJSON
     reqType: *httpGET
 
+"/api/settings" :
+    rtnType : *rtnJSON
+    reqType : *httpGET
+
+"/api/settings/save" :
+    rtnType : *rtnJSON
+    reqType : *httpPOST
+
+"/api/settings/backup" :
+    rtnType : *rtnJSON
+    reqType : *httpGET
+
+"/api/settings/restore" :
+    rtnType : *rtnJSON
+    reqType : *httpPOST
+
+"/api/settings/factory-reset" :
+    rtnType : *rtnJSON
+    reqType : *httpPOST
+
 "/api/wifi/scan" :
     rtnType: *rtnJSON
     reqType: *httpGET
 
 "/api/wifi/connect" :
+    rtnType: *rtnJSON
+    reqType: *httpPOST
+
+"/api/devices" :
+    rtnType: *rtnJSON
+    reqType: *httpGET
+
+"/api/devices/add" :
+    rtnType: *rtnJSON
+    reqType: *httpPOST
+
+"/api/devices/remove" :
+    rtnType: *rtnJSON
+    reqType: *httpPOST
+
+"/api/devices/toggle" :
+    rtnType: *rtnJSON
+    reqType: *httpPOST
+
+"/api/device-config" :
+    rtnType: *rtnJSON
+    reqType: *httpGET
+
+"/api/reboot" :
     rtnType: *rtnJSON
     reqType: *httpPOST

@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home Controller</title>
+    <link rel="stylesheet" href="/Css/style.css?v=15">
+    <script>
+        (function(){
+            var t=localStorage.getItem('theme');
+            var dark=t==='dark'||(!t&&matchMedia('(prefers-color-scheme:dark)').matches);
+            document.documentElement.setAttribute('data-theme',dark?'dark':'light');
+        })();
+    </script>
+</head>
+<body>
+    <div id="alertContainer"></div>
+
+    <div class="container" id="shell">
+
+        <!-- ── Header ─────────────────────────────────────────────── -->
+        <div class="header">
+            <h1 class="controller-name">Home Controller</h1>
+            <div class="header-right">
+                <!-- WiFi status badge -->
+                <div id="wifiStatus" class="wifi-badge">
+                    <span class="status-indicator status-connecting"></span>
+                    <span id="wifiLabel">Checking...</span>
+                </div>
+
+                <!-- Theme toggle -->
+                <button class="btn-icon" id="themeToggle" title="Toggle dark/light mode">&#9790;</button>
+
+                <!-- Admin avatar + dropdown -->
+                <div class="avatar-menu" id="avatarMenu">
+                    <button class="avatar-btn" id="avatarBtn" title="Admin menu">
+                        <span class="avatar-icon">&#128100;</span>
+                        <span class="avatar-label">Admin</span>
+                        <span class="avatar-caret">&#9660;</span>
+                    </button>
+                    <div class="avatar-dropdown" id="avatarDropdown">
+                        <div class="dropdown-header">
+                            <span class="dropdown-user-icon">&#128100;</span>
+                            <span>Admin</span>
+                        </div>
+                        <div class="dropdown-divider"></div>
+                        <a href="#dashboard" class="dropdown-item" id="menuDashboard">
+                            &#8962; Dashboard
+                        </a>
+                        <a href="#settings" class="dropdown-item" id="menuSettings">
+                            &#9881; Settings
+                        </a>
+                        <div class="dropdown-divider"></div>
+                        <button class="dropdown-item dropdown-item-danger" id="menuReboot">
+                            &#9863; Reboot Device
+                        </button>
+                        <button class="dropdown-item dropdown-item-danger" id="menuLogout">
+                            &#10226; Logout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Page content ───────────────────────────────────────── -->
+        <div id="app">
+            <div class="loading">
+                <div class="loading-spinner"></div>
+                <div>Loading...</div>
+            </div>
+        </div>
+
+        <!-- ── Bottom nav (mobile) ────────────────────────────────── -->
+        <nav class="bottom-nav" id="bottomNav" style="display:none;">
+            <a href="#dashboard" class="bottom-nav-item nav-link" id="bnDashboard">
+                <span class="bottom-nav-icon">&#8962;</span>
+                <span class="bottom-nav-label">Dashboard</span>
+            </a>
+            <a href="#settings" class="bottom-nav-item nav-link" id="bnSettings">
+                <span class="bottom-nav-icon">&#9881;</span>
+                <span class="bottom-nav-label">Settings</span>
+            </a>
+        </nav>
+
+    </div>
+
+    <!-- ── Change password modal ──────────────────────────────────── -->
+    <div id="changePwModal" class="modal-backdrop" style="display:none;">
+        <div class="modal-box">
+            <h3>Change Admin Password</h3>
+            <div id="modalAlertContainer"></div>
+            <div class="form-group">
+                <label>Current Password</label>
+                <div class="input-with-toggle">
+                    <input type="password" id="curPw" class="form-control" placeholder="Current password">
+                    <button type="button" class="btn-pw-toggle" id="toggleCurPw" title="Show/hide">&#128065;</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>New Password</label>
+                <div class="input-with-toggle">
+                    <input type="password" id="newPw" class="form-control" placeholder="New password (min 6 chars)">
+                    <button type="button" class="btn-pw-toggle" id="toggleNewPw" title="Show/hide">&#128065;</button>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-primary" id="savePwBtn">Save</button>
+                <button class="btn btn-cancel" id="cancelPwBtn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="initialPasswordModal" class="modal-backdrop" style="display:none;">
+        <div class="modal-box">
+            <h3>Set Admin Password</h3>
+            <p style="color:var(--text-muted);font-size:14px;margin:0 0 20px;">
+                Set a new admin password to continue.
+            </p>
+            <div id="initialPasswordAlert"></div>
+            <div class="form-group">
+                <label for="initialPassword">New Admin Password</label>
+                <div class="input-with-toggle">
+                    <input type="password" id="initialPassword" class="form-control" placeholder="6 to 32 characters" autocomplete="new-password">
+                    <button type="button" class="btn-pw-toggle" id="toggleInitialPassword" title="Show/hide password">&#128065;</button>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-primary" id="saveInitialPasswordBtn">Save Password</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Factory reset modal ───────────────────────────────────── -->
+    <div id="factoryResetModal" class="modal-backdrop" style="display:none;">
+        <div class="modal-box">
+            <h3>Confirm Factory Reset</h3>
+            <p style="color:var(--text-muted);font-size:14px;margin:0 0 20px;">
+                Enter the admin password to erase all settings and devices.
+            </p>
+            <div class="form-group">
+                <label for="factoryResetPassword">Admin Password</label>
+                <input type="password" id="factoryResetPassword" class="form-control" placeholder="Admin password">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-danger" id="confirmFactoryResetBtn">Reset</button>
+                <button class="btn btn-cancel" id="cancelFactoryResetBtn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Reboot confirm modal ───────────────────────────────────── -->
+    <div id="rebootModal" class="modal-backdrop" style="display:none;">
+        <div class="modal-box">
+            <h3>Reboot Device?</h3>
+            <p style="color:var(--text-muted);font-size:14px;margin:0 0 20px;">
+                The device will restart. You will be disconnected for a few seconds.
+            </p>
+            <div class="modal-actions">
+                <button class="btn btn-danger" id="confirmRebootBtn">Reboot</button>
+                <button class="btn btn-cancel" id="cancelRebootBtn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/Js/app.js?v=16"></script>
+    <script>
+        if (!localStorage.getItem('authToken')) {
+            window.location.replace('/login');
+        }
+
+        window.addEventListener('load', function () {
+            loadWifiStatus();
+            router();
+            document.getElementById('bottomNav').style.display = '';
+        });
+
+        // ── WiFi status ─────────────────────────────────────────────
+        async function loadWifiStatus() {
+            const badge = document.getElementById('wifiStatus');
+            const label = document.getElementById('wifiLabel');
+            if (!badge || !label) return;
+            const result = await api.getWiFiStatus();
+            if (!result.success) return;
+            if (result.data.connected) {
+                badge.querySelector('.status-indicator').className = 'status-indicator status-connected';
+                label.textContent = result.data.ssid + ' \u00b7 ' + result.data.ip;
+            } else {
+                badge.querySelector('.status-indicator').className = 'status-indicator status-disconnected';
+                label.textContent = 'Not connected';
+            }
+        }
+        setInterval(loadWifiStatus, 30000);
+
+        // ── SPA Router ──────────────────────────────────────────────
+        const PAGES = {
+            '':          '/page/dashboard',
+            'dashboard': '/page/dashboard',
+            'wifi':      '/page/wifi',
+            'settings':  '/page/settings',
+        };
+
+        async function router() {
+            const hash = location.hash.replace('#', '') || '';
+            const fragUrl = PAGES[hash] || PAGES['dashboard'];
+            await loadFragment(fragUrl);
+            document.querySelectorAll('.nav-link').forEach(a => {
+                a.classList.toggle('nav-link-active',
+                    a.getAttribute('href') === '#' + hash ||
+                    (hash === '' && a.getAttribute('href') === '#dashboard'));
+            });
+        }
+        window.addEventListener('hashchange', router);
+
+        (async function loadControllerSettings() {
+            const result = await api.getSettings();
+            if (!result.success || !result.data.success) return;
+            document.querySelectorAll('.controller-name').forEach(el => el.textContent = result.data.controllerName);
+            document.title = result.data.controllerName;
+            localStorage.setItem('logoutMinutes', String(result.data.logoutMinutes));
+            if (result.data.mustChangePassword) {
+                document.getElementById('initialPasswordModal').style.display = 'flex';
+                document.getElementById('initialPassword').focus();
+            }
+        })();
+
+        async function loadFragment(url) {
+            const app = document.getElementById('app');
+            app.innerHTML = '<div class="loading"><div class="loading-spinner"></div><div>Loading...</div></div>';
+            try {
+                const resp = await fetch(url);
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                app.innerHTML = await resp.text();
+                app.querySelectorAll('script').forEach(old => {
+                    const s = document.createElement('script');
+                    s.textContent = old.textContent;
+                    old.replaceWith(s);
+                });
+            } catch (e) {
+                app.innerHTML = '<div class="alert alert-danger">Failed to load page.</div>';
+            }
+        }
+
+        // ── Avatar dropdown ─────────────────────────────────────────
+        const avatarBtn      = document.getElementById('avatarBtn');
+        const avatarDropdown = document.getElementById('avatarDropdown');
+
+        avatarBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const open = avatarDropdown.classList.toggle('open');
+            avatarBtn.setAttribute('aria-expanded', open);
+        });
+        // Close when clicking anywhere else
+        document.addEventListener('click', function() {
+            avatarDropdown.classList.remove('open');
+            avatarBtn.setAttribute('aria-expanded', false);
+        });
+        avatarDropdown.addEventListener('click', function(e) { e.stopPropagation(); });
+
+        // Close dropdown on nav link click
+        document.querySelectorAll('#avatarDropdown a.dropdown-item').forEach(a => {
+            a.addEventListener('click', () => avatarDropdown.classList.remove('open'));
+        });
+
+        // ── Theme toggle ────────────────────────────────────────────
+        (function() {
+            const btn = document.getElementById('themeToggle');
+            function applyTheme(dark) {
+                document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+                btn.textContent = dark ? '\u2600' : '\u263D';
+            }
+            applyTheme(document.documentElement.getAttribute('data-theme') === 'dark');
+            btn.addEventListener('click', function() {
+                const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                localStorage.setItem('theme', isDark ? 'light' : 'dark');
+                applyTheme(!isDark);
+            });
+        })();
+
+        // ── Logout ──────────────────────────────────────────────────
+        document.getElementById('menuLogout').addEventListener('click', async function() {
+            await api.logout();
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('lastActivity');
+            window.location.replace('/login');
+        });
+
+        // ── Reboot ──────────────────────────────────────────────────
+        document.getElementById('menuReboot').addEventListener('click', function() {
+            avatarDropdown.classList.remove('open');
+            document.getElementById('rebootModal').style.display = 'flex';
+        });
+        document.getElementById('cancelRebootBtn').addEventListener('click', function() {
+            document.getElementById('rebootModal').style.display = 'none';
+        });
+        document.getElementById('confirmRebootBtn').addEventListener('click', async function() {
+            this.disabled = true;
+            this.textContent = 'Rebooting...';
+            await api.reboot();
+            document.getElementById('rebootModal').style.display = 'none';
+            // Clear the local session immediately — the ESP32 reboot destroys
+            // the in-RAM token, so any stored token is now invalid.
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('lastActivity');
+            // Show a countdown alert then redirect to login
+            let secs = 8;
+            const alertContainer = document.getElementById('alertContainer');
+            const div = document.createElement('div');
+            div.className = 'alert alert-info';
+            div.textContent = 'Device is rebooting. Redirecting to login in ' + secs + 's...';
+            alertContainer.appendChild(div);
+            const iv = setInterval(function() {
+                secs--;
+                if (secs <= 0) {
+                    clearInterval(iv);
+                    window.location.replace('/login');
+                } else {
+                    div.textContent = 'Device is rebooting. Redirecting to login in ' + secs + 's...';
+                }
+            }, 1000);
+        });
+
+        // ── Change password ─────────────────────────────────────────
+        document.getElementById('cancelPwBtn').addEventListener('click', function() {
+            document.getElementById('changePwModal').style.display = 'none';
+            document.getElementById('curPw').value = '';
+            document.getElementById('newPw').value = '';
+        });
+        document.getElementById('savePwBtn').addEventListener('click', async function() {
+            const cur = document.getElementById('curPw').value;
+            const nw  = document.getElementById('newPw').value;
+            if (!cur || !nw) { Utils.showAlert('Both fields are required', 'danger', 'modalAlertContainer'); return; }
+            this.disabled = true; this.textContent = 'Saving...';
+            const result = await api.changePassword(cur, nw);
+            this.disabled = false; this.textContent = 'Save';
+            if (result.success && result.data && result.data.success) {
+                document.getElementById('changePwModal').style.display = 'none';
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('lastActivity');
+                window.location.replace('/login');
+            } else {
+                Utils.showAlert((result.data && result.data.message) || 'Failed', 'danger', 'modalAlertContainer');
+            }
+        });
+
+        document.getElementById('toggleInitialPassword').addEventListener('click', function() {
+            const input = document.getElementById('initialPassword');
+            const hidden = input.type === 'password';
+            input.type = hidden ? 'text' : 'password';
+            this.textContent = hidden ? '\uD83D\uDE48' : '\uD83D\uDC41';
+        });
+        document.getElementById('saveInitialPasswordBtn').addEventListener('click', async function() {
+            const password = document.getElementById('initialPassword').value;
+            const alert = document.getElementById('initialPasswordAlert');
+            if (password.length < 6 || password.length > 32) {
+                alert.innerHTML = '<div class="alert alert-danger">Password must be 6 to 32 characters</div>';
+                return;
+            }
+            this.disabled = true;
+            this.textContent = 'Saving...';
+            const result = await api.setInitialPassword(password);
+            this.disabled = false;
+            this.textContent = 'Save Password';
+            if (result.success && result.data && result.data.success) {
+                document.getElementById('initialPasswordModal').style.display = 'none';
+            } else {
+                alert.innerHTML = '<div class="alert alert-danger">' +
+                    ((result.data && result.data.message) || 'Failed to set password') + '</div>';
+            }
+        });
+
+        // Password toggle helpers
+        function bindPwToggle(btnId, inputId) {
+            document.getElementById(btnId).addEventListener('click', function() {
+                const inp = document.getElementById(inputId);
+                const hidden = inp.type === 'password';
+                inp.type = hidden ? 'text' : 'password';
+                this.textContent = hidden ? '\uD83D\uDE48' : '\uD83D\uDC41';
+            });
+        }
+        bindPwToggle('toggleCurPw', 'curPw');
+        bindPwToggle('toggleNewPw', 'newPw');
+    </script>
+</body>
+</html>

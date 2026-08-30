@@ -5,17 +5,26 @@ class ESP32WebAPI {
         this.baseUrl = baseUrl;
     }
 
-    async request(endpoint, options = {}) {
-        const defaultOptions = {
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        };
+    // Returns the stored auth token, or null
+    _token() {
+        return localStorage.getItem('authToken');
+    }
 
-        const config = { ...defaultOptions, ...options };
+    async request(endpoint, options = {}) {
+        const headers = { 'Content-Type': 'application/json' };
+        const token = this._token();
+        if (token) headers['X-Auth-Token'] = token;
+
+        const config = { headers, ...options };
 
         try {
             const response = await fetch(this.baseUrl + endpoint, config);
+            // Unauthorised — wipe token and redirect to login (except on login page itself)
+            if (response.status === 401 && !window.location.pathname.startsWith('/login')) {
+                localStorage.removeItem('authToken');
+                window.location.replace('/login');
+                return { success: false, error: 'Unauthorized' };
+            }
             const data = await response.json();
             return { success: true, data };
         } catch (error) {
@@ -35,6 +44,38 @@ class ESP32WebAPI {
         });
     }
 
+    // Auth API methods
+    async login(password) {
+        return this.post('/api/login', { password });
+    }
+
+    async logout() {
+        return this.post('/api/logout', {});
+    }
+
+    async reboot() {
+        return this.post('/api/reboot', {});
+    }
+
+    async changePassword(current, newPassword) {
+        return this.post('/api/auth/change-password', { current, 'new': newPassword });
+    }
+    async setInitialPassword(password) {
+        return this.post('/api/auth/set-initial-password', { password });
+    }
+
+    async getSettings() {
+        return this.get('/api/settings');
+    }
+
+    async saveSettings(controllerName, logoutMinutes) {
+        return this.post('/api/settings/save', { controllerName, logoutMinutes });
+    }
+
+    async getSettingsBackup() { return this.get('/api/settings/backup'); }
+    async restoreSettings(data) { return this.post('/api/settings/restore', data); }
+    async factoryReset(password) { return this.post('/api/settings/factory-reset', { password }); }
+
     // WiFi API methods
     async getWiFiStatus() {
         return this.get('/api/wifi/status');
@@ -48,13 +89,26 @@ class ESP32WebAPI {
         return this.post('/api/wifi/connect', { ssid, password });
     }
 
-    // Auth API methods
-    async login(username, password) {
-        return this.post('/api/login', { username, password });
+    // Device config (allowed pins + max devices)
+    async getDeviceConfig() {
+        return this.get('/api/device-config');
     }
 
-    async register(username, password, email) {
-        return this.post('/api/register', { username, password, email });
+    // Device API methods
+    async getDevices() {
+        return this.get('/api/devices');
+    }
+
+    async addDevice(name, pin, voltage) {
+        return this.post('/api/devices/add', { name, pin, voltage });
+    }
+
+    async toggleDevice(index, state) {
+        return this.post('/api/devices/toggle', { index, state });
+    }
+
+    async removeDevice(index) {
+        return this.post('/api/devices/remove', { index });
     }
 }
 
@@ -289,48 +343,50 @@ const WiFiManager = {
     }
 };
 
+const DEFAULT_SESSION_INACTIVITY_MS = 15 * 60 * 1000;
+
+function redirectToLogin() {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('lastActivity');
+    if (!window.location.pathname.startsWith('/login')) {
+        window.location.replace('/login');
+    }
+}
+
+function installSessionGuard() {
+    if (window.location.pathname.startsWith('/login')) return;
+    if (!localStorage.getItem('authToken')) {
+        redirectToLogin();
+        return;
+    }
+
+    let timer;
+    function armTimer() {
+        clearTimeout(timer);
+        const lastActivity = Number(localStorage.getItem('lastActivity'));
+        const minutes = Number(localStorage.getItem('logoutMinutes'));
+        const timeout = (Number.isFinite(minutes) && minutes >= 1 ? minutes * 60 * 1000 : DEFAULT_SESSION_INACTIVITY_MS);
+        const remaining = timeout - (Date.now() - lastActivity);
+        if (!Number.isFinite(lastActivity) || remaining <= 0) {
+            redirectToLogin();
+            return;
+        }
+        timer = setTimeout(redirectToLogin, remaining);
+    }
+
+    function recordActivity() {
+        localStorage.setItem('lastActivity', String(Date.now()));
+        armTimer();
+    }
+
+    ['pointerdown', 'keydown', 'touchstart'].forEach(eventName => {
+        document.addEventListener(eventName, recordActivity, { passive: true });
+    });
+    window.addEventListener('pageshow', armTimer);
+    armTimer();
+}
+
+installSessionGuard();
+
 // Initialize API instance globally
 const api = new ESP32WebAPI();
-
-// Auto-refresh WiFi status every 30 seconds
-let statusInterval;
-function startStatusMonitoring() {
-    statusInterval = setInterval(async () => {
-        const statusElement = document.getElementById('wifiStatus');
-        if (statusElement) {
-            const result = await api.getWiFiStatus();
-            if (result.success) {
-                updateWiFiStatusDisplay(result.data);
-            }
-        }
-    }, 30000);
-}
-
-function updateWiFiStatusDisplay(status) {
-    const statusElement = document.getElementById('wifiStatus');
-    if (!statusElement) return;
-
-    if (status.connected) {
-        statusElement.innerHTML = `
-            <span class="status-indicator status-connected"></span>
-            Connected to ${status.ssid} (${status.ip})
-        `;
-    } else {
-        statusElement.innerHTML = `
-            <span class="status-indicator status-disconnected"></span>
-            Not connected
-        `;
-    }
-}
-
-// Start monitoring when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    startStatusMonitoring();
-});
-
-// Clean up interval when page unloads
-window.addEventListener('beforeunload', function() {
-    if (statusInterval) {
-        clearInterval(statusInterval);
-    }
-});
