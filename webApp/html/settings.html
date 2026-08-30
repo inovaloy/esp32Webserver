@@ -6,7 +6,7 @@
     <div class="settings-panel">
         <div class="form-group">
             <label for="controllerName">Controller Name</label>
-            <input type="text" id="controllerName" class="form-control" maxlength="31" placeholder="Home Controller">
+            <input type="text" id="controllerName" class="form-control" maxlength="20" placeholder="Home Controller">
         </div>
         <div class="form-group">
             <label for="logoutMinutes">Auto Logout (minutes)</label>
@@ -58,6 +58,7 @@
         this.disabled = false;
         if (result.success && result.data.success) {
             localStorage.setItem('logoutMinutes', String(minutes));
+            localStorage.setItem('controllerName', name);
             document.querySelectorAll('.controller-name').forEach(el => el.textContent = name);
             document.title = name;
             Utils.showAlert('Settings saved', 'success');

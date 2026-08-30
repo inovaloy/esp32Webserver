@@ -40,6 +40,11 @@
     <script src="/js/app.js?v=16"></script>
     <script>
         const themeToggle = document.getElementById('themeToggle');
+        const storedControllerName = localStorage.getItem('controllerName');
+        if (storedControllerName) {
+            document.querySelector('.login-container h1').textContent = storedControllerName;
+            document.title = storedControllerName + ' - Login';
+        }
         themeToggle.addEventListener('click', function() {
             const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
             localStorage.setItem('theme', isDark ? 'light' : 'dark');

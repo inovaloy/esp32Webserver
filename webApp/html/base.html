@@ -216,6 +216,7 @@
             if (!result.success || !result.data.success) return;
             document.querySelectorAll('.controller-name').forEach(el => el.textContent = result.data.controllerName);
             document.title = result.data.controllerName;
+            localStorage.setItem('controllerName', result.data.controllerName);
             localStorage.setItem('logoutMinutes', String(result.data.logoutMinutes));
             if (result.data.mustChangePassword) {
                 document.getElementById('initialPasswordModal').style.display = 'flex';

@@ -54,8 +54,11 @@ int counter = 0;
 volatile bool rebootScheduled = false;
 unsigned long rebootAt = 0;
 volatile bool eepromDirty = false;   // set by httpd task; committed + rebooted in loop()
+volatile bool oledStatusDirty = false;
 unsigned long factoryResetButtonPressedAt = 0;
 bool factoryResetButtonHandled = false;
+uint8_t oledDevicePage = 0;
+unsigned long oledDevicePageChangedAt = 0;
 
 // Function declarations
 bool eepromIsValid();
@@ -68,6 +71,7 @@ void writeStringToEEPROM(int addr, String data, int maxLength);
 void loadDevicesFromEEPROM();
 void saveDevicesToEEPROM();
 void updateOledDeviceStatus();
+bool isHighVoltageDevice(uint8_t pin);
 void loadAdminPasswordFromEEPROM();
 void saveAdminPassword(const char* newPassword, bool markConfigured = true);
 bool checkAdminPassword(const char* attempt);
@@ -182,6 +186,15 @@ void loop()
     if (eepromDirty) {
         storageCommit();
         eepromDirty = false;
+    }
+    if (oledStatusDirty) {
+        updateOledDeviceStatus();
+        oledStatusDirty = false;
+    }
+    if (millis() - oledDevicePageChangedAt >= 4000) {
+        oledDevicePage = (oledDevicePage + 1) % 4;
+        oledDevicePageChangedAt = millis();
+        updateOledDeviceStatus();
     }
     if (rebootScheduled && millis() >= rebootAt) {
         Serial.println("Rebooting...");
@@ -422,30 +435,74 @@ void saveDevicesToEEPROM() {
     eepromDirty = true;
 }
 
+bool isHighVoltageDevice(uint8_t pin) {
+    for (uint8_t i = 0; i < CFG_HIGH_VOLTAGE_PIN_COUNT; i++) {
+        if (CFG_HIGH_VOLTAGE_PINS[i] == pin) return true;
+    }
+    return false;
+}
+
 void updateOledDeviceStatus() {
     display.clearDisplay();
     display.setTextSize(1);
     display.setTextColor(WHITE);
-    display.setCursor(0, 0);
-    display.println(controllerName);
-    display.setCursor(0, 10);
-    if (WiFi.status() == WL_CONNECTED)
-        display.printf("WiFi: %s", WiFi.SSID().c_str());
-    else
-        display.printf("AP: %s", apSsid);
-    display.drawLine(0, 20, 127, 20, WHITE);
-    uint8_t shown = deviceCount < 6 ? deviceCount : 6;
-    for (uint8_t i = 0; i < shown; i++) {
-        display.setCursor(0, 23 + i * 8);
-        char truncated[11];
-        strncpy(truncated, devices[i].name, 10);
-        truncated[10] = '\0';
-        display.printf("%-10s %s", truncated, devices[i].state ? "ON " : "OFF");
+    if (oledDevicePage == 0) {
+        display.setCursor(0, 0);
+        display.println(controllerName);
+        display.setCursor(0, 14);
+        if (WiFi.status() == WL_CONNECTED) {
+            display.print("WiFi: ");
+            display.print(WiFi.SSID().substring(0, 20));
+            display.setCursor(0, 28);
+            display.print("IP: ");
+            display.println(WiFi.localIP());
+        } else {
+            display.print("AP: ");
+            display.print(String(apSsid).substring(0, 20));
+            display.setCursor(0, 28);
+            display.print("IP: ");
+            display.println(apIP);
+        }
+        display.setCursor(0, 42);
+        display.println("Firmware: 1.0.1");
+    } else if (oledDevicePage == 1) {
+        uint8_t highVoltageCount = 0;
+        uint8_t lowVoltageCount = 0;
+        uint8_t onCount = 0;
+        for (uint8_t i = 0; i < deviceCount; i++) {
+            if (isHighVoltageDevice(devices[i].pin)) highVoltageCount++;
+            else lowVoltageCount++;
+            if (devices[i].state) onCount++;
+        }
+        display.setCursor(0, 0);
+        display.println("Device summary");
+        display.setCursor(0, 14);
+        display.printf("Total devices: %d", deviceCount);
+        display.setCursor(0, 26);
+        display.printf("High power:   %d", highVoltageCount);
+        display.setCursor(0, 38);
+        display.printf("Low power:    %d", lowVoltageCount);
+        display.setCursor(0, 50);
+        display.printf("ON: %d       OFF: %d", onCount, deviceCount - onCount);
+    } else {
+        uint8_t firstDevice = (oledDevicePage - 2) * 4;
+        uint8_t lastDevice = firstDevice + 4;
+        if (lastDevice > deviceCount) lastDevice = deviceCount;
+        display.setCursor(0, 0);
+        display.printf("Devices %d-%d", firstDevice + 1, firstDevice + 4);
+        for (uint8_t i = firstDevice; i < lastDevice && i < MAX_DEVICES; i++) {
+            display.setCursor(0, 12 + (i - firstDevice) * 12);
+            display.print(devices[i].name);
+            const char* status = devices[i].state ? "ON" : "OFF";
+            display.setCursor(128 - strlen(status) * 6, 12 + (i - firstDevice) * 12);
+            display.print(status);
+        }
+        if (deviceCount == 0) {
+            display.setCursor(0, 24);
+            display.println("No devices added");
+        }
     }
-    if (deviceCount == 0) {
-        display.setCursor(0, 30);
-        display.println("No devices added");
-    }
+    oledDevicePageChangedAt = millis();
     display.display();
 }
 
@@ -528,6 +585,7 @@ void saveControllerSettings(const char* name, uint16_t minutes) {
     storageWrite(LOGOUT_MINUTES_ADDR + 1, (uint8_t)(minutes >> 8));
     storageWrite(EEPROM_MAGIC_ADDR, EEPROM_MAGIC_BYTE);
     eepromDirty = true;
+    oledStatusDirty = true;
 }
 
 void saveOledSettings(uint8_t brightness, bool enabled) {
