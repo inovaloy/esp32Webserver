@@ -263,6 +263,36 @@ a:hover { text-decoration: underline; }
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 15%, transparent);
 }
 
+.settings-page { max-width: 560px; }
+.page-heading h2 { margin: 0 0 5px; font-size: 20px; }
+.page-heading p { margin: 0 0 20px; color: var(--text-muted); font-size: 14px; }
+.settings-panel {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+}
+.settings-tools { margin-top: 14px; }
+.settings-tools h3 { margin: 0 0 10px; font-size: 14px; color: var(--text-muted); }
+.settings-action {
+    display: block;
+    width: 100%;
+    padding: 10px 0;
+    border: 0;
+    border-top: 1px solid var(--border);
+    background: none;
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+}
+.settings-action:hover { color: var(--green); }
+.settings-danger { color: var(--red); }
+.settings-toggle { display: block; margin: 0 0 16px; color: var(--text); font-size: 14px; }
+.settings-toggle input { margin-right: 8px; }
+.settings-version { margin-top: 14px; color: var(--text-faint); font-size: 12px; }
+
 /* ── Loading state ───────────────────────────────────────────────────────── */
 .loading {
     text-align: center;

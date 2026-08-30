@@ -31,6 +31,10 @@ uint8_t deviceCount = 0;
 
 // Admin password buffer
 char adminPassword[ADMIN_PASS_LEN + 1];
+char controllerName[CONTROLLER_NAME_LEN];
+uint16_t logoutMinutes = DEFAULT_LOGOUT_MINUTES;
+uint8_t oledBrightness = DEFAULT_OLED_BRIGHTNESS;
+bool oledEnabled = true;
 
 // AP credentials — derived from MAC at runtime
 char ap_ssid[32];
@@ -60,6 +64,10 @@ void updateOledDeviceStatus();
 void loadAdminPasswordFromEEPROM();
 void saveAdminPassword(const char* newPassword);
 bool checkAdminPassword(const char* attempt);
+void loadControllerSettings();
+void saveControllerSettings(const char* name, uint16_t minutes);
+void saveOledSettings(uint8_t brightness, bool enabled);
+void factoryResetSettings();
 
 void setup()
 {
@@ -94,6 +102,9 @@ void setup()
         Serial.println(F("SSD1306 allocation failed"));
         for(;;); // Don't proceed, loop forever
     }
+    display.ssd1306_command(SSD1306_SETCONTRAST);
+    display.ssd1306_command(oledBrightness);
+    display.dim(!oledEnabled);
     display.clearDisplay();
 
     display.setTextSize(2);             // Normal 1:1 pixel scale
@@ -105,6 +116,7 @@ void setup()
 
     // Load saved admin password (or set MAC-derived default on first boot)
     loadAdminPasswordFromEEPROM();
+    loadControllerSettings();
 
     // Load saved devices and restore GPIO states
     loadDevicesFromEEPROM();
@@ -313,7 +325,7 @@ void updateOledDeviceStatus() {
     display.setTextSize(1);
     display.setTextColor(WHITE);
     display.setCursor(0, 0);
-    display.println("Home Controller");
+    display.println(controllerName);
     display.setCursor(0, 10);
     if (WiFi.status() == WL_CONNECTED)
         display.printf("WiFi: %s", WiFi.SSID().c_str());
@@ -378,4 +390,52 @@ bool checkAdminPassword(const char* attempt) {
     for (int i = 0; i < ADMIN_PASS_LEN; i++)
         diff |= (uint8_t)adminPassword[i] ^ (uint8_t)attempt[i];
     return diff == 0;
+}
+
+void loadControllerSettings() {
+    if (eepromIsValid()) {
+        for (int i = 0; i < CONTROLLER_NAME_LEN; i++)
+            controllerName[i] = (char)EEPROM.read(CONTROLLER_NAME_ADDR + i);
+        controllerName[CONTROLLER_NAME_LEN - 1] = '\0';
+        uint16_t storedMinutes = EEPROM.read(LOGOUT_MINUTES_ADDR) |
+                                 ((uint16_t)EEPROM.read(LOGOUT_MINUTES_ADDR + 1) << 8);
+        uint8_t storedBrightness = EEPROM.read(OLED_BRIGHTNESS_ADDR);
+        uint8_t storedEnabled = EEPROM.read(OLED_ENABLED_ADDR);
+        if (controllerName[0] != '\0' && storedMinutes >= 1 && storedMinutes <= 1440) {
+            logoutMinutes = storedMinutes;
+            oledBrightness = storedBrightness == 0 ? DEFAULT_OLED_BRIGHTNESS : storedBrightness;
+            oledEnabled = storedEnabled != 0;
+            return;
+        }
+    }
+    saveControllerSettings("Home Controller", DEFAULT_LOGOUT_MINUTES);
+}
+
+void saveControllerSettings(const char* name, uint16_t minutes) {
+    strncpy(controllerName, name, CONTROLLER_NAME_LEN - 1);
+    controllerName[CONTROLLER_NAME_LEN - 1] = '\0';
+    logoutMinutes = minutes;
+    for (int i = 0; i < CONTROLLER_NAME_LEN; i++)
+        EEPROM.write(CONTROLLER_NAME_ADDR + i, (uint8_t)controllerName[i]);
+    EEPROM.write(LOGOUT_MINUTES_ADDR, (uint8_t)(minutes & 0xFF));
+    EEPROM.write(LOGOUT_MINUTES_ADDR + 1, (uint8_t)(minutes >> 8));
+    EEPROM.write(EEPROM_MAGIC_ADDR, EEPROM_MAGIC_BYTE);
+    eepromDirty = true;
+}
+
+void saveOledSettings(uint8_t brightness, bool enabled) {
+    oledBrightness = brightness;
+    oledEnabled = enabled;
+    display.ssd1306_command(SSD1306_SETCONTRAST);
+    display.ssd1306_command(brightness);
+    display.dim(!enabled);
+    EEPROM.write(OLED_BRIGHTNESS_ADDR, brightness);
+    EEPROM.write(OLED_ENABLED_ADDR, enabled ? 1 : 0);
+    eepromDirty = true;
+}
+
+void factoryResetSettings() {
+    for (int i = 0; i < EEPROM_SIZE; i++) EEPROM.write(i, 0);
+    EEPROM.write(EEPROM_MAGIC_ADDR, EEPROM_MAGIC_BYTE);
+    eepromDirty = true;
 }

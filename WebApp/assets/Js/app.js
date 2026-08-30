@@ -61,6 +61,18 @@ class ESP32WebAPI {
         return this.post('/api/auth/change-password', { current, 'new': newPassword });
     }
 
+    async getSettings() {
+        return this.get('/api/settings');
+    }
+
+    async saveSettings(controllerName, logoutMinutes) {
+        return this.post('/api/settings/save', { controllerName, logoutMinutes });
+    }
+
+    async getSettingsBackup() { return this.get('/api/settings/backup'); }
+    async restoreSettings(data) { return this.post('/api/settings/restore', data); }
+    async factoryReset() { return this.post('/api/settings/factory-reset', {}); }
+
     // WiFi API methods
     async getWiFiStatus() {
         return this.get('/api/wifi/status');
@@ -328,7 +340,7 @@ const WiFiManager = {
     }
 };
 
-const SESSION_INACTIVITY_MS = 15 * 60 * 1000;
+const DEFAULT_SESSION_INACTIVITY_MS = 15 * 60 * 1000;
 
 function redirectToLogin() {
     localStorage.removeItem('authToken');
@@ -349,7 +361,9 @@ function installSessionGuard() {
     function armTimer() {
         clearTimeout(timer);
         const lastActivity = Number(localStorage.getItem('lastActivity'));
-        const remaining = SESSION_INACTIVITY_MS - (Date.now() - lastActivity);
+        const minutes = Number(localStorage.getItem('logoutMinutes'));
+        const timeout = (Number.isFinite(minutes) && minutes >= 1 ? minutes * 60 * 1000 : DEFAULT_SESSION_INACTIVITY_MS);
+        const remaining = timeout - (Date.now() - lastActivity);
         if (!Number.isFinite(lastActivity) || remaining <= 0) {
             redirectToLogin();
             return;

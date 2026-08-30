@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Home Controller</title>
-    <link rel="stylesheet" href="/Css/style.css?v=10">
+    <link rel="stylesheet" href="/Css/style.css?v=13">
     <script>
         (function(){
             var t=localStorage.getItem('theme');
@@ -20,7 +20,7 @@
 
         <!-- ── Header ─────────────────────────────────────────────── -->
         <div class="header">
-            <h1>Home Controller</h1>
+            <h1 class="controller-name">Home Controller</h1>
             <div class="header-right">
                 <!-- WiFi status badge -->
                 <div id="wifiStatus" class="wifi-badge">
@@ -47,13 +47,10 @@
                         <a href="#dashboard" class="dropdown-item" id="menuDashboard">
                             &#8962; Dashboard
                         </a>
-                        <a href="#wifi" class="dropdown-item" id="menuWifi">
-                            &#9881; WiFi Settings
+                        <a href="#settings" class="dropdown-item" id="menuSettings">
+                            &#9881; Settings
                         </a>
                         <div class="dropdown-divider"></div>
-                        <button class="dropdown-item" id="menuChangePw">
-                            &#128274; Change Password
-                        </button>
                         <button class="dropdown-item dropdown-item-danger" id="menuReboot">
                             &#9863; Reboot Device
                         </button>
@@ -79,9 +76,9 @@
                 <span class="bottom-nav-icon">&#8962;</span>
                 <span class="bottom-nav-label">Dashboard</span>
             </a>
-            <a href="#wifi" class="bottom-nav-item nav-link" id="bnWifi">
+            <a href="#settings" class="bottom-nav-item nav-link" id="bnSettings">
                 <span class="bottom-nav-icon">&#9881;</span>
-                <span class="bottom-nav-label">WiFi</span>
+                <span class="bottom-nav-label">Settings</span>
             </a>
         </nav>
 
@@ -127,7 +124,7 @@
         </div>
     </div>
 
-    <script src="/Js/app.js?v=12"></script>
+    <script src="/Js/app.js?v=14"></script>
     <script>
         if (!localStorage.getItem('authToken')) {
             window.location.replace('/login');
@@ -161,6 +158,7 @@
             '':          '/page/dashboard',
             'dashboard': '/page/dashboard',
             'wifi':      '/page/wifi',
+            'settings':  '/page/settings',
         };
 
         async function router() {
@@ -174,6 +172,14 @@
             });
         }
         window.addEventListener('hashchange', router);
+
+        (async function loadControllerSettings() {
+            const result = await api.getSettings();
+            if (!result.success || !result.data.success) return;
+            document.querySelectorAll('.controller-name').forEach(el => el.textContent = result.data.controllerName);
+            document.title = result.data.controllerName;
+            localStorage.setItem('logoutMinutes', String(result.data.logoutMinutes));
+        })();
 
         async function loadFragment(url) {
             const app = document.getElementById('app');
@@ -272,10 +278,6 @@
         });
 
         // ── Change password ─────────────────────────────────────────
-        document.getElementById('menuChangePw').addEventListener('click', function() {
-            avatarDropdown.classList.remove('open');
-            document.getElementById('changePwModal').style.display = 'flex';
-        });
         document.getElementById('cancelPwBtn').addEventListener('click', function() {
             document.getElementById('changePwModal').style.display = 'none';
             document.getElementById('curPw').value = '';

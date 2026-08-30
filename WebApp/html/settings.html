@@ -1,0 +1,108 @@
+<div class="settings-page">
+    <div class="page-heading">
+        <h2>Settings</h2>
+        <p>Customize your controller.</p>
+    </div>
+    <div class="settings-panel">
+        <div class="form-group">
+            <label for="controllerName">Controller Name</label>
+            <input type="text" id="controllerName" class="form-control" maxlength="31" placeholder="Home Controller">
+        </div>
+        <div class="form-group">
+            <label for="logoutMinutes">Auto Logout (minutes)</label>
+            <input type="number" id="logoutMinutes" class="form-control" min="1" max="1440" step="1">
+        </div>
+        <div class="form-group">
+            <label for="oledBrightness">OLED Brightness</label>
+            <input type="range" id="oledBrightness" class="form-control" min="1" max="255" step="1">
+        </div>
+        <label class="settings-toggle"><input type="checkbox" id="oledEnabled"> Enable OLED display</label>
+        <button class="btn btn-primary" id="saveSettingsBtn">Save Settings</button>
+    </div>
+    <div class="settings-panel settings-tools">
+        <h3>System Settings</h3>
+        <a class="settings-action" href="#wifi">&#9881; WiFi Settings</a>
+        <button class="settings-action" id="changePasswordBtn">&#128274; Change Admin Password</button>
+        <button class="settings-action" id="backupSettingsBtn">&#8681; Backup Configuration</button>
+        <label class="settings-action" for="restoreSettingsFile">&#8679; Restore Configuration</label>
+        <input type="file" id="restoreSettingsFile" accept="application/json,.json" hidden>
+        <button class="settings-action settings-danger" id="factoryResetBtn">&#9888; Factory Reset</button>
+        <div class="settings-version">Firmware <span id="firmwareVersion">Unknown</span></div>
+    </div>
+</div>
+
+<script>
+    (async function loadSettings() {
+        const result = await api.getSettings();
+        if (!result.success || !result.data.success) return;
+        document.getElementById('controllerName').value = result.data.controllerName;
+        document.getElementById('logoutMinutes').value = result.data.logoutMinutes;
+        document.getElementById('oledBrightness').value = result.data.oledBrightness;
+        document.getElementById('oledEnabled').checked = result.data.oledEnabled;
+        document.getElementById('firmwareVersion').textContent = result.data.firmwareVersion;
+    })();
+
+    document.getElementById('saveSettingsBtn').addEventListener('click', async function () {
+        const name = document.getElementById('controllerName').value.trim();
+        const minutes = parseInt(document.getElementById('logoutMinutes').value, 10);
+        if (!name || !Number.isInteger(minutes) || minutes < 1 || minutes > 1440) {
+            Utils.showAlert('Enter a controller name and logout time from 1 to 1440 minutes', 'danger');
+            return;
+        }
+        this.disabled = true;
+        const result = await api.post('/api/settings/save', {
+            controllerName: name, logoutMinutes: minutes,
+            oledBrightness: parseInt(document.getElementById('oledBrightness').value, 10),
+            oledEnabled: document.getElementById('oledEnabled').checked
+        });
+        this.disabled = false;
+        if (result.success && result.data.success) {
+            localStorage.setItem('logoutMinutes', String(minutes));
+            document.querySelectorAll('.controller-name').forEach(el => el.textContent = name);
+            document.title = name;
+            Utils.showAlert('Settings saved', 'success');
+        } else {
+            Utils.showAlert(result.data && result.data.message || 'Failed to save settings', 'danger');
+        }
+    });
+
+    document.getElementById('changePasswordBtn').addEventListener('click', function () {
+        document.getElementById('changePwModal').style.display = 'flex';
+    });
+
+    document.getElementById('backupSettingsBtn').addEventListener('click', async function () {
+        const result = await api.getSettingsBackup();
+        if (!result.success) { Utils.showAlert('Backup failed', 'danger'); return; }
+        const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: 'application/json' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'controller-config.json';
+        link.click();
+        URL.revokeObjectURL(link.href);
+    });
+
+    document.getElementById('restoreSettingsFile').addEventListener('change', function () {
+        const file = this.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async () => {
+            try {
+                if (!confirm('Restore this configuration and reboot the controller?')) return;
+                const result = await api.restoreSettings(JSON.parse(reader.result));
+                Utils.showAlert(result.data && result.data.message || 'Restore failed', result.success && result.data.success ? 'success' : 'danger');
+            } catch (_) { Utils.showAlert('Invalid backup file', 'danger'); }
+            this.value = '';
+        };
+        reader.readAsText(file);
+    });
+
+    document.getElementById('factoryResetBtn').addEventListener('click', async function () {
+        if (!confirm('Factory reset all settings and devices? The controller will reboot.')) return;
+        const result = await api.factoryReset();
+        if (result.success && result.data.success) {
+            localStorage.clear();
+            Utils.showAlert('Factory reset started', 'success');
+            setTimeout(() => window.location.replace('/login'), 1500);
+        } else Utils.showAlert('Factory reset failed', 'danger');
+    });
+</script>

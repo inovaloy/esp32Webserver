@@ -47,6 +47,12 @@ contentTypes: &contentTypes
     macro   : "WIFI_CONFIG_HTML"
     reqType : *httpGET
 
+"/page/settings" :
+    rtnType : *rtnHTML
+    fileName: "settings.html"
+    macro   : "SETTINGS_HTML"
+    reqType : *httpGET
+
 
 # Static Assets - CSS, JavaScript and media files
 # Frontend resources served with appropriate MIME types for web interface styling and functionality
@@ -82,6 +88,26 @@ contentTypes: &contentTypes
 "/api/wifi/status" :
     rtnType: *rtnJSON
     reqType: *httpGET
+
+"/api/settings" :
+    rtnType : *rtnJSON
+    reqType : *httpGET
+
+"/api/settings/save" :
+    rtnType : *rtnJSON
+    reqType : *httpPOST
+
+"/api/settings/backup" :
+    rtnType : *rtnJSON
+    reqType : *httpGET
+
+"/api/settings/restore" :
+    rtnType : *rtnJSON
+    reqType : *httpPOST
+
+"/api/settings/factory-reset" :
+    rtnType : *rtnJSON
+    reqType : *httpPOST
 
 "/api/wifi/scan" :
     rtnType: *rtnJSON

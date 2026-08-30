@@ -19,10 +19,18 @@ extern char         adminPassword[];
 extern void         saveAdminPassword(const char* newPassword);
 extern bool         checkAdminPassword(const char* attempt);
 extern volatile bool eepromDirty;   // committed from main task loop()
+extern char         controllerName[];
+extern uint16_t     logoutMinutes;
+extern void         saveControllerSettings(const char* name, uint16_t minutes);
+extern uint8_t       oledBrightness;
+extern bool          oledEnabled;
+extern void          saveOledSettings(uint8_t brightness, bool enabled);
+extern void          factoryResetSettings();
+extern void          scheduleReboot();
 
 // ── Session token (single slot, RAM only — cleared on reboot) ─────────────
 #define SESSION_TOKEN_LEN 32
-#define SESSION_INACTIVITY_MS (15UL * 60UL * 1000UL)
+#define SESSION_INACTIVITY_MS ((unsigned long)logoutMinutes * 60UL * 1000UL)
 static char sessionToken[SESSION_TOKEN_LEN + 1] = {0};
 static unsigned long sessionLastActivity = 0;
 
@@ -167,6 +175,150 @@ char* apiAuthChangePasswordHandlerHook(httpd_req_t *req) {
         cJSON_Delete(json);
     }
 
+    char *out = cJSON_Print(response);
+    cJSON_Delete(response);
+    return out;
+}
+
+// GET /api/settings
+char* apiSettingsHandlerHook(httpd_req_t *req) {
+    if (!isAuthorised(req)) { sendUnauthorised(req); return nullptr; }
+    cJSON *response = cJSON_CreateObject();
+    cJSON_AddBoolToObject(response, "success", true);
+    cJSON_AddStringToObject(response, "controllerName", controllerName);
+    cJSON_AddNumberToObject(response, "logoutMinutes", logoutMinutes);
+    cJSON_AddNumberToObject(response, "oledBrightness", oledBrightness);
+    cJSON_AddBoolToObject(response, "oledEnabled", oledEnabled);
+    cJSON_AddStringToObject(response, "firmwareVersion", "1.0.0");
+    char *out = cJSON_Print(response);
+    cJSON_Delete(response);
+    return out;
+}
+
+// POST /api/settings/save { "controllerName": "Home Controller", "logoutMinutes": 15, "oledBrightness": 100, "oledEnabled": true }
+char* apiSettingsSaveHandlerHook(httpd_req_t *req) {
+    if (!isAuthorised(req)) { sendUnauthorised(req); return nullptr; }
+    char *jsonData = getContentFromReq(req);
+    cJSON *json = jsonData ? cJSON_Parse(jsonData) : NULL;
+    free(jsonData);
+    cJSON *response = cJSON_CreateObject();
+    cJSON *name_j = json ? cJSON_GetObjectItem(json, "controllerName") : NULL;
+    cJSON *minutes_j = json ? cJSON_GetObjectItem(json, "logoutMinutes") : NULL;
+    cJSON *brightness_j = json ? cJSON_GetObjectItem(json, "oledBrightness") : NULL;
+    cJSON *enabled_j = json ? cJSON_GetObjectItem(json, "oledEnabled") : NULL;
+    int minutes = minutes_j && cJSON_IsNumber(minutes_j) ? minutes_j->valueint : 0;
+    int brightness = brightness_j && cJSON_IsNumber(brightness_j) ? brightness_j->valueint : -1;
+    if (!json || !cJSON_IsString(name_j) || strlen(name_j->valuestring) == 0 ||
+        strlen(name_j->valuestring) >= CONTROLLER_NAME_LEN || minutes < 1 || minutes > 1440 ||
+        brightness < 1 || brightness > 255 || !cJSON_IsBool(enabled_j)) {
+        cJSON_AddBoolToObject(response, "success", false);
+        cJSON_AddStringToObject(response, "message", "Enter a controller name and logout time from 1 to 1440 minutes");
+    } else {
+        saveControllerSettings(name_j->valuestring, (uint16_t)minutes);
+        saveOledSettings((uint8_t)brightness, cJSON_IsTrue(enabled_j));
+        cJSON_AddBoolToObject(response, "success", true);
+        cJSON_AddStringToObject(response, "message", "Settings saved");
+    }
+    if (json) cJSON_Delete(json);
+    char *out = cJSON_Print(response);
+    cJSON_Delete(response);
+    return out;
+}
+
+char* apiSettingsBackupHandlerHook(httpd_req_t *req) {
+    if (!isAuthorised(req)) { sendUnauthorised(req); return nullptr; }
+    cJSON *response = cJSON_CreateObject();
+    cJSON *devicesJson = cJSON_CreateArray();
+    cJSON_AddStringToObject(response, "controllerName", controllerName);
+    cJSON_AddNumberToObject(response, "logoutMinutes", logoutMinutes);
+    cJSON_AddNumberToObject(response, "oledBrightness", oledBrightness);
+    cJSON_AddBoolToObject(response, "oledEnabled", oledEnabled);
+    for (uint8_t i = 0; i < deviceCount; i++) {
+        cJSON *device = cJSON_CreateObject();
+        cJSON_AddStringToObject(device, "name", devices[i].name);
+        cJSON_AddNumberToObject(device, "pin", devices[i].pin);
+        cJSON_AddBoolToObject(device, "state", devices[i].state != 0);
+        cJSON_AddItemToArray(devicesJson, device);
+    }
+    cJSON_AddItemToObject(response, "devices", devicesJson);
+    char *out = cJSON_Print(response);
+    cJSON_Delete(response);
+    return out;
+}
+
+char* apiSettingsRestoreHandlerHook(httpd_req_t *req) {
+    if (!isAuthorised(req)) { sendUnauthorised(req); return nullptr; }
+    char *jsonData = getContentFromReq(req);
+    cJSON *json = jsonData ? cJSON_Parse(jsonData) : NULL;
+    free(jsonData);
+    cJSON *response = cJSON_CreateObject();
+    cJSON *devicesJson = json ? cJSON_GetObjectItem(json, "devices") : NULL;
+    bool invalidDevice = false;
+    if (cJSON_IsArray(devicesJson)) {
+        cJSON *item;
+        cJSON_ArrayForEach(item, devicesJson) {
+            cJSON *pin = cJSON_GetObjectItem(item, "pin");
+            bool allowed = false;
+            if (cJSON_IsNumber(pin)) {
+                for (int i = 0; i < CFG_HIGH_VOLTAGE_PIN_COUNT; i++)
+                    allowed |= CFG_HIGH_VOLTAGE_PINS[i] == pin->valueint;
+                for (int i = 0; i < CFG_LOW_VOLTAGE_PIN_COUNT; i++)
+                    allowed |= CFG_LOW_VOLTAGE_PINS[i] == pin->valueint;
+            }
+            if (!allowed) { invalidDevice = true; break; }
+        }
+    }
+    if (!json || !cJSON_IsArray(devicesJson) || cJSON_GetArraySize(devicesJson) > MAX_DEVICES || invalidDevice) {
+        cJSON_AddBoolToObject(response, "success", false);
+        cJSON_AddStringToObject(response, "message", "Invalid backup file");
+    } else {
+        cJSON *name = cJSON_GetObjectItem(json, "controllerName");
+        cJSON *minutes = cJSON_GetObjectItem(json, "logoutMinutes");
+        cJSON *brightness = cJSON_GetObjectItem(json, "oledBrightness");
+        cJSON *enabled = cJSON_GetObjectItem(json, "oledEnabled");
+        if (!cJSON_IsString(name) || !cJSON_IsNumber(minutes) || !cJSON_IsNumber(brightness) ||
+            !cJSON_IsBool(enabled) || strlen(name->valuestring) == 0 ||
+            strlen(name->valuestring) >= CONTROLLER_NAME_LEN || minutes->valueint < 1 || minutes->valueint > 1440 ||
+            brightness->valueint < 1 || brightness->valueint > 255) {
+            cJSON_AddBoolToObject(response, "success", false);
+            cJSON_AddStringToObject(response, "message", "Invalid backup settings");
+        } else {
+            saveControllerSettings(name->valuestring, (uint16_t)minutes->valueint);
+            saveOledSettings((uint8_t)brightness->valueint, cJSON_IsTrue(enabled));
+            deviceCount = 0;
+            cJSON *item;
+            cJSON_ArrayForEach(item, devicesJson) {
+                cJSON *itemName = cJSON_GetObjectItem(item, "name");
+                cJSON *pin = cJSON_GetObjectItem(item, "pin");
+                cJSON *state = cJSON_GetObjectItem(item, "state");
+                if (!cJSON_IsString(itemName) || !cJSON_IsNumber(pin) || !cJSON_IsBool(state)) continue;
+                strncpy(devices[deviceCount].name, itemName->valuestring, DEVICE_NAME_LEN - 1);
+                devices[deviceCount].name[DEVICE_NAME_LEN - 1] = '\0';
+                devices[deviceCount].pin = (uint8_t)pin->valueint;
+                devices[deviceCount].state = cJSON_IsTrue(state) ? 1 : 0;
+                pinMode(devices[deviceCount].pin, OUTPUT);
+                digitalWrite(devices[deviceCount].pin, devices[deviceCount].state ? HIGH : LOW);
+                deviceCount++;
+            }
+            saveDevicesToEEPROM();
+            cJSON_AddBoolToObject(response, "success", true);
+            cJSON_AddStringToObject(response, "message", "Backup restored; rebooting");
+            scheduleReboot();
+        }
+    }
+    if (json) cJSON_Delete(json);
+    char *out = cJSON_Print(response);
+    cJSON_Delete(response);
+    return out;
+}
+
+char* apiSettingsFactoryResetHandlerHook(httpd_req_t *req) {
+    if (!isAuthorised(req)) { sendUnauthorised(req); return nullptr; }
+    factoryResetSettings();
+    cJSON *response = cJSON_CreateObject();
+    cJSON_AddBoolToObject(response, "success", true);
+    cJSON_AddStringToObject(response, "message", "Factory reset; rebooting");
+    scheduleReboot();
     char *out = cJSON_Print(response);
     cJSON_Delete(response);
     return out;

@@ -25,6 +25,14 @@
 #define DEVICE_SLOT_SIZE  18    // 16 bytes name + 1 byte pin + 1 byte state
 #define DEVICE_NAME_LEN   16
 
+#define CONTROLLER_NAME_ADDR 384
+#define CONTROLLER_NAME_LEN  32
+#define LOGOUT_MINUTES_ADDR  416
+#define DEFAULT_LOGOUT_MINUTES 15
+#define OLED_BRIGHTNESS_ADDR  418
+#define OLED_ENABLED_ADDR     419
+#define DEFAULT_OLED_BRIGHTNESS 100
+
 // Single controllable GPIO device
 struct Device {
     char    name[DEVICE_NAME_LEN];
