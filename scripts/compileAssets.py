@@ -137,8 +137,16 @@ def compressAssets(enableCompression=True):
 
     createHeaderFile()
 
-    # Process assets referenced in linker data
+    # Process assets referenced in linker data.
+    # Multiple routes may share the same physical file (e.g. favicon and
+    # apple-touch-icon both served from webLogo.png).  Only compress and
+    # emit the C array once per unique fileName.
+    seenFiles = set()
     for asset in LinkerData:
+        if asset['fileName'] in seenFiles:
+            print(f"Skipping duplicate file: {asset['fileName']} (already processed)")
+            continue
+        seenFiles.add(asset['fileName'])
         assetPath = os.path.join(ASSETS_DIR, asset['fileName'])
         if os.path.exists(assetPath):
             processAsset(assetPath, asset['fileName'], enableCompression, asset)
@@ -222,6 +230,19 @@ def main():
     else:
         print("Asset compression: DISABLED")
     print("-" * 60)
+
+    # Sync source images from Assets/ into the web asset directory so the
+    # linker pipeline always picks up the latest version.
+    ASSET_SYNC = [
+        ("Assets/webLogo.png", os.path.join(ASSETS_DIR, "image/webLogo.png")),
+    ]
+    for src, dst in ASSET_SYNC:
+        if os.path.exists(src):
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.copy(src, dst)
+            print(f"Synced: {src} → {dst}")
+        else:
+            print(f"Warning: source asset not found: {src}")
 
     readLinkerDataFile()
     compressAssets(enableCompression)

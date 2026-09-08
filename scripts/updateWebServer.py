@@ -206,7 +206,9 @@ static esp_err_t {handlerName}(httpd_req_t *req){{
 
 def generateAssetHandler(cpp, asset, gitHash='dev'):
     """Generate handler for static asset"""
-    handlerName = f"{convertToCamelCase(asset['fileName'])}Handler"
+    # Handler name is derived from the route (always unique).
+    # Array name is derived from the fileName (matches what autoGenAssets.h defines).
+    handlerName = f"{convertToCamelCase(asset['route'].replace('/', '_').replace('.', '_'))}Handler"
     arrayName = convertToCamelCase(asset['fileName'])
     arrayLen = arrayName + "Len"
 
@@ -280,7 +282,7 @@ void startWebServer(){
 
     # Generate URI structures for assets
     for asset in assets:
-        handlerName = f"{convertToCamelCase(asset['fileName'])}Handler"
+        handlerName = f"{convertToCamelCase(asset['route'].replace('/', '_').replace('.', '_'))}Handler"
         uriName = f"uri_{convertToCamelCase(asset['route'].replace('/', '_').replace('.', '_'))}"
 
         cpp.write(f"""    // Asset: {asset['route']}

@@ -19,6 +19,7 @@ autogen:
 	.venv/bin/python3 scripts/compileHtml.py
 	.venv/bin/python3 scripts/compileAssets.py
 	.venv/bin/python3 scripts/updateWebServer.py
+	.venv/bin/python3 scripts/compileOledLogo.py
 
 
 build: autogen
