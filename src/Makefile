@@ -17,7 +17,8 @@ LIBS = $(ESP32_PATH)/libraries/WiFi \
        $(ESP32_PATH)/libraries/SPI \
        $(ROOT)/libs/Adafruit_SSD1306 \
        $(ROOT)/libs/Adafruit-GFX-Library \
-       $(ROOT)/libs/Adafruit_BusIO
+       $(ROOT)/libs/Adafruit_BusIO \
+       $(ROOT)/libs/qrcode/src
 
 # Exclude unnecessary features to reduce binary size
 EXCLUDE_DIRS = $(SRC_DIR)|SPITFT|SPIDevice|NetworkClientSecure|ssl_client|WebServer

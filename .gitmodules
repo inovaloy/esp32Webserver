@@ -9,3 +9,7 @@
 [submodule "libs/Adafruit_SSD1306"]
 	path = libs/Adafruit_SSD1306
 	url = https://github.com/adafruit/Adafruit_SSD1306
+
+[submodule "libs/qrcode"]
+	path = libs/qrcode
+	url = https://github.com/ricmoo/QRCode
