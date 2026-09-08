@@ -174,6 +174,7 @@ void writeStringToEEPROM(int addr, String data, int maxLength);
 void loadDevicesFromEEPROM();
 void saveDevicesToEEPROM();
 void updateOledDeviceStatus();
+uint8_t oledPageCount();
 bool isHighVoltageDevice(uint8_t pin);
 void loadAdminPasswordFromEEPROM();
 void saveAdminPassword(const char* newPassword, bool markConfigured = true);
@@ -305,7 +306,7 @@ void loop()
         oledStatusDirty = false;
     }
     if (!isAPMode && !oledPageButtonStablePressed && millis() - oledDevicePageChangedAt >= 4000) {
-        oledDevicePage = (oledDevicePage + 1) % 4;
+        oledDevicePage = (oledDevicePage + 1) % oledPageCount();
         oledDevicePageChangedAt = millis();
         updateOledDeviceStatus();
     }
@@ -370,7 +371,7 @@ void checkOledPageButton() {
         if (isAPMode) {
             apShowQr = !apShowQr;
         } else {
-            oledDevicePage = (oledDevicePage + 1) % 4;
+            oledDevicePage = (oledDevicePage + 1) % oledPageCount();
         }
     }
     oledDevicePageChangedAt = now;
@@ -779,6 +780,14 @@ bool isHighVoltageDevice(uint8_t pin) {
     return false;
 }
 
+// Returns the total number of OLED pages based on how many devices are configured.
+// Pages: 0=network info, 1=device summary, 2+=device list (4 devices per page).
+// Device list pages are only included when there are devices to show.
+uint8_t oledPageCount() {
+    if (deviceCount == 0) return 2;                      // no devices: info + summary only
+    return 2 + ((deviceCount + 3) / 4);                  // ceil(deviceCount / 4) list pages
+}
+
 void updateOledDeviceStatus() {
     // In AP mode: render whichever page the button has selected
     if (isAPMode) {
@@ -791,21 +800,32 @@ void updateOledDeviceStatus() {
     display.setTextSize(1);
     display.setTextColor(WHITE);
     if (oledDevicePage == 0) {
+        // When the admin password has never been changed, show it on this page
+        // so the user knows what to log in with.  Once changed, hide it.
+        // Tighten row spacing slightly when the extra row is needed.
+        const bool showPwd = adminPasswordChangeRequired;
+        const uint8_t rowStep = showPwd ? 10 : 14;
+
         display.setCursor(0, 0);
         display.println(controllerName);
-        display.setCursor(0, 14);
+        display.setCursor(0, rowStep);
         if (ETH.hasIP()) {
             display.print("ETH: ");
             display.println(ETH.localIP());
         } else {
             display.println("ETH: unavailable");
         }
-        display.setCursor(0, 28);
+        display.setCursor(0, rowStep * 2);
         if (WiFi.status() == WL_CONNECTED) {
             display.print("WiFi: ");
             display.println(WiFi.localIP());
         } else {
             display.println("WiFi: unavailable");
+        }
+        if (showPwd) {
+            display.setCursor(0, rowStep * 3);
+            display.print("Admin: ");
+            display.println(adminPassword);
         }
         display.setCursor(0, 42);
         display.println("Firmware: 1.0.1");
