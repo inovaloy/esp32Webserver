@@ -1,3 +1,4 @@
+#include "qrcode.h"
 #include <WiFi.h>
 #include <ETH.h>
 #include <DNSServer.h>
@@ -8,6 +9,42 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+
+// ── Boot splash logo (32×32, broadcast/hub symbol) ───────────────────────
+static const uint8_t PROGMEM bootLogo[] = {
+  0x00, 0x00, 0x00, 0x00,
+  0x00, 0x0F, 0xF8, 0x00,
+  0x00, 0x3F, 0xFE, 0x00,
+  0x00, 0xF8, 0x0F, 0x80,
+  0x01, 0xE0, 0x03, 0xC0,
+  0x07, 0x80, 0x00, 0xF0,
+  0x03, 0x07, 0xF0, 0x60,
+  0x00, 0x1F, 0xFC, 0x00,
+  0x00, 0x7C, 0x1F, 0x00,
+  0x00, 0x70, 0x07, 0x00,
+  0x00, 0x20, 0x02, 0x00,
+  0x00, 0x03, 0xE0, 0x00,
+  0x00, 0x0F, 0xF8, 0x00,
+  0x00, 0x06, 0x30, 0x00,
+  0x00, 0x00, 0x00, 0x00,
+  0x00, 0x01, 0xC0, 0x00,
+  0x00, 0x01, 0xC0, 0x00,
+  0x00, 0x01, 0xC0, 0x00,
+  0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00
+};
 
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
@@ -90,6 +127,68 @@ unsigned long oledPageButtonChangedAt = 0;
 unsigned long oledPageButtonPressedAt = 0;
 uint8_t oledDevicePage = 0;
 unsigned long oledDevicePageChangedAt = 0;
+// In AP mode the button toggles between QR page and info page.
+// true = show QR (default); false = show info.
+bool apShowQr = true;
+
+// ── AP mode OLED pages ────────────────────────────────────────────────────
+
+// Page 1 (default): QR code on the left + WiFi SSID/Key on the right.
+// QR: version 3 (29×29) at 2 px/module = 58×58 px, x=3, y=3.
+// Right panel: x=64, width=64 px (max 10 chars/line at text size 1).
+void drawApQrPage() {
+    char payload[64];
+    snprintf(payload, sizeof(payload), "WIFI:T:WPA;S:%s;P:%s;;", apSsid, apPassword);
+
+    QRCode qr;
+    uint8_t qrBuf[qrcode_getBufferSize(3)];
+    qrcode_initText(&qr, qrBuf, 3, ECC_LOW, payload);
+
+    display.clearDisplay();
+
+    const uint8_t scale = 2;
+    const uint8_t xOff  = 3;
+    const uint8_t yOff  = 3;
+    for (uint8_t y = 0; y < qr.size; y++) {
+        for (uint8_t x = 0; x < qr.size; x++) {
+            if (qrcode_getModule(&qr, x, y)) {
+                display.fillRect(xOff + x * scale, yOff + y * scale,
+                                 scale, scale, WHITE);
+            }
+        }
+    }
+
+    // Right panel — WiFi credentials (all values fit within 10 chars)
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.setCursor(64,  0); display.println("WiFi:");
+    display.setCursor(64,  8); display.println(apSsid);
+    display.setCursor(64, 20); display.println("Key:");
+    display.setCursor(64, 28); display.println(apPassword);
+    display.setCursor(64, 44); display.println("[btn]=info");
+    display.display();
+}
+
+// Page 2 (button press): full-width text — IP address + admin password.
+// Uses full 128 px width so the IP (192.168.4.1) never overflows.
+void drawApInfoPage() {
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.setCursor(0,  0); display.println("-- Connect info --");
+    display.setCursor(0, 12); display.print("IP:    "); display.println(apIP.toString().c_str());
+    display.setCursor(0, 24); display.print("Admin: ");
+    // Show the actual password only while it is still the factory default.
+    // Once the user has changed it, show **** to confirm it is set but keep it secret.
+    if (adminPasswordChangeRequired) {
+        display.println(adminPassword);
+    } else {
+        display.println("********");
+    }
+    display.setCursor(0, 36); display.println("Open IP in browser");
+    display.setCursor(0, 52); display.println("[btn]=QR code");
+    display.display();
+}
 
 // Function declarations
 bool eepromIsValid();
@@ -189,10 +288,15 @@ void setup()
     applyOledSettings();
     display.clearDisplay();
 
-    display.setTextSize(2);             // Normal 1:1 pixel scale
-    display.setTextColor(WHITE);        // Draw white text
-    display.setCursor(0,0);             // Start at top-left corner
-    display.println(F("WebServer"));
+    // Boot splash: broadcast logo on the left, "Device Hub" title on the right
+    display.drawBitmap(0, 16, bootLogo, 32, 32, WHITE);
+    display.setTextColor(WHITE);
+    display.setTextSize(2);
+    display.setCursor(38, 14); display.println(F("Device"));
+    display.setCursor(38, 32); display.println(F("Hub"));
+    display.drawFastHLine(38, 51, 90, WHITE);
+    display.setTextSize(1);
+    display.setCursor(10, 54); display.println(F("ESP32 DevHub  v1.0.1"));
     display.display();
     delay(2000);
 
@@ -234,7 +338,7 @@ void loop()
         updateOledDeviceStatus();
         oledStatusDirty = false;
     }
-    if (!oledPageButtonStablePressed && millis() - oledDevicePageChangedAt >= 4000) {
+    if (!isAPMode && !oledPageButtonStablePressed && millis() - oledDevicePageChangedAt >= 4000) {
         oledDevicePage = (oledDevicePage + 1) % 4;
         oledDevicePageChangedAt = millis();
         updateOledDeviceStatus();
@@ -295,9 +399,13 @@ void checkOledPageButton() {
         return;
     }
 
-    // Short press advances one page. Holding the button only freezes the page.
+    // Short press: in AP mode toggle QR/info; otherwise advance normal page.
     if (now - oledPageButtonPressedAt < OLED_PAGE_BUTTON_HOLD_MS) {
-        oledDevicePage = (oledDevicePage + 1) % 4;
+        if (isAPMode) {
+            apShowQr = !apShowQr;
+        } else {
+            oledDevicePage = (oledDevicePage + 1) % 4;
+        }
     }
     oledDevicePageChangedAt = now;
     updateOledDeviceStatus();
@@ -576,17 +684,6 @@ bool connectToWiFi() {
     }
     Serial.printf("Trying saved WiFi: %s\r\n", ssid.c_str());
 
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setCursor(0, 0);
-    display.println("Checking saved WiFi...");
-    display.display();
-
-    display.clearDisplay();
-    display.setCursor(0, 0);
-    display.printf("Connecting to:\n%s", ssid.c_str());
-    display.display();
-
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid.c_str(), password.c_str());
 
@@ -628,18 +725,11 @@ void displayNetworkInfo() {
     }
 
     Serial.printf("[NET] %s active at http://%s\r\n", networkName.c_str(), networkIP.toString().c_str());
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setCursor(0, 0);
-    display.println(networkName);
-    display.printf("IP: %s\n", networkIP.toString().c_str());
-    if (activeNetwork == NetworkType::WiFi)
-        display.printf("SSID: %s\n", WiFi.SSID().c_str());
-    else if (activeNetwork == NetworkType::AP)
-        display.printf("SSID: %s\n", apSsid);
-    display.display();
-    delay(2000);
-    updateOledDeviceStatus();
+    // AP mode already shows the QR page from startAPMode(); for all other
+    // network types go straight to the device-status view.
+    if (!isAPMode) {
+        updateOledDeviceStatus();
+    }
 }
 
 void displayWiFiInfo() {
@@ -652,15 +742,6 @@ void startAPMode() {
     isAPMode = true;
     activeNetwork = NetworkType::AP;
 
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setCursor(0, 0);
-    display.println("AP Mode Started");
-    display.printf("SSID: %s\n", apSsid);
-    display.printf("Password: %s\n", apPassword);
-    display.printf("IP: %s\n", apIP.toString().c_str());
-    display.display();
-
     Serial.printf("Starting AP Mode - SSID: %s, Password: %s\r\n", apSsid, apPassword);
 
     WiFi.mode(WIFI_AP);
@@ -672,6 +753,10 @@ void startAPMode() {
 
     Serial.printf("AP IP address: %s\r\n", WiFi.softAPIP().toString().c_str());
     Serial.println("Connect to the AP and navigate to 192.168.4.1 to configure WiFi");
+
+    // Start on QR page; user can press the page button to see the info page
+    apShowQr = true;
+    drawApQrPage();
 }
 
 // ── EEPROM: devices ───────────────────────────────────────────────────────
@@ -729,6 +814,13 @@ bool isHighVoltageDevice(uint8_t pin) {
 }
 
 void updateOledDeviceStatus() {
+    // In AP mode: render whichever page the button has selected
+    if (isAPMode) {
+        if (apShowQr) drawApQrPage();
+        else          drawApInfoPage();
+        return;
+    }
+
     display.clearDisplay();
     display.setTextSize(1);
     display.setTextColor(WHITE);
@@ -746,9 +838,6 @@ void updateOledDeviceStatus() {
         if (WiFi.status() == WL_CONNECTED) {
             display.print("WiFi: ");
             display.println(WiFi.localIP());
-        } else if (isAPMode) {
-            display.print("AP: ");
-            display.println(apIP);
         } else {
             display.println("WiFi: unavailable");
         }
@@ -821,6 +910,8 @@ void loadAdminPasswordFromEEPROM() {
              "%02X%02X%02X%02X", mac[2], mac[3], mac[4], mac[5]);
     saveAdminPassword(adminPassword, false);
     Serial.printf("Default admin password set from MAC: %s\r\n", adminPassword);
+    // Default password is visible on the AP info page (button press) —
+    // no separate boot screen needed.
 }
 
 void saveAdminPassword(const char* newPassword, bool markConfigured) {
