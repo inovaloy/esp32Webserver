@@ -7,6 +7,7 @@
 #include "deviceConfig.h"
 #include <cJSON.h>
 #include <WiFi.h>
+#include <ETH.h>
 #include <EEPROM.h>
 #include <string.h>
 
@@ -380,13 +381,26 @@ char* apiSettingsFactoryResetHandlerHook(httpd_req_t *req) {
 
 char* apiWifiStatusHandlerHook(httpd_req_t *req) {
     cJSON *response = cJSON_CreateObject();
-    if (WiFi.status() == WL_CONNECTED) {
-        cJSON_AddBoolToObject(response, "connected", true);
+    bool ethernetConnected = ETH.hasIP();
+    bool wifiConnected = WiFi.status() == WL_CONNECTED;
+    cJSON_AddBoolToObject(response, "connected", ethernetConnected || wifiConnected);
+    if (ethernetConnected) {
+        cJSON_AddStringToObject(response, "ethernet_ip", ETH.localIP().toString().c_str());
+    }
+    if (wifiConnected) {
+        cJSON_AddStringToObject(response, "wifi_ip", WiFi.localIP().toString().c_str());
         cJSON_AddStringToObject(response, "ssid", WiFi.SSID().c_str());
-        cJSON_AddStringToObject(response, "ip", WiFi.localIP().toString().c_str());
         cJSON_AddNumberToObject(response, "rssi", WiFi.RSSI());
+    }
+    if (ethernetConnected) {
+        cJSON_AddStringToObject(response, "network", "Ethernet");
+        cJSON_AddStringToObject(response, "ssid", "Ethernet");
+        cJSON_AddStringToObject(response, "ip", ETH.localIP().toString().c_str());
+    } else if (wifiConnected) {
+        cJSON_AddStringToObject(response, "network", "WiFi");
+        cJSON_AddStringToObject(response, "ip", WiFi.localIP().toString().c_str());
     } else {
-        cJSON_AddBoolToObject(response, "connected", false);
+        cJSON_AddStringToObject(response, "network", "None");
         cJSON_AddStringToObject(response, "status", "Disconnected");
     }
     char *out = cJSON_Print(response);

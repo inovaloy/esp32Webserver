@@ -12,6 +12,7 @@ EXCLUDE_DIRS = $(SRC_DIR)
 
 # Only include necessary ESP32 libraries (not all of them)
 LIBS = $(ESP32_PATH)/libraries/WiFi \
+       $(ESP32_PATH)/libraries/Ethernet \
        $(ESP32_PATH)/libraries/Wire \
        $(ESP32_PATH)/libraries/SPI \
        $(ROOT)/libs/Adafruit_SSD1306 \
