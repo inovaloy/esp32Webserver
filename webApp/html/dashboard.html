@@ -1,22 +1,26 @@
 <!-- Dashboard fragment — injected into #app by base.html SPA router -->
-<div id="deviceGrid" class="device-grid">
+<div id="deviceGrid">
     <div class="loading">
         <div class="loading-spinner"></div>
         <div>Loading devices...</div>
     </div>
 </div>
 
-<!-- Add device section -->
+<!-- Add device button -->
 <div class="add-device-section">
     <button class="btn btn-add" id="toggleAddForm">+ Add Device</button>
-    <div id="addDeviceForm" class="add-form" style="display:none;">
+</div>
+
+<!-- Add device modal -->
+<div id="addDeviceModal" class="modal-backdrop" style="display:none;">
+    <div class="modal-box modal-box-md">
         <h3>Add New Device</h3>
-        <div class="form-row">
-            <div class="form-group">
-                <label>Device Name</label>
-                <input type="text" id="newDeviceName" class="form-control"
-                       placeholder="e.g. Bedroom Lamp" maxlength="15">
-            </div>
+        <div class="form-group">
+            <label>Device Name <span class="field-hint">(max 15 characters)</span></label>
+            <input type="text" id="newDeviceName" class="form-control"
+                   placeholder="e.g. Bedroom Lamp" maxlength="15">
+        </div>
+        <div class="form-row-2">
             <div class="form-group">
                 <label>Voltage</label>
                 <select id="newDeviceVoltage" class="form-control">
@@ -31,7 +35,89 @@
                 </select>
             </div>
         </div>
-        <button class="btn btn-primary" id="addDeviceBtn">Add Device</button>
+
+        <!-- Ping watchdog section -->
+        <div class="add-watchdog-row">
+            <label class="add-watchdog-label">
+                <span>Enable Ping Watchdog</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="addAutoEnable" onchange="onAddAutoToggle()">
+                    <span class="toggle-slider"></span>
+                </label>
+            </label>
+        </div>
+        <div id="addAutoFields" style="display:none;">
+            <div class="form-row-2">
+                <div class="form-group">
+                    <label>Target IP Address</label>
+                    <input type="text" id="addAutoIp" class="form-control"
+                           placeholder="192.168.1.100" maxlength="15">
+                </div>
+                <div class="form-group">
+                    <label>Check Interval (sec)</label>
+                    <input type="number" id="addAutoInterval" class="form-control"
+                           min="5" max="255" value="30">
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-actions">
+            <button class="btn btn-primary" id="addDeviceBtn">Add Device</button>
+            <button class="btn btn-cancel" id="addDeviceCancelBtn">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Rename modal -->
+<div id="renameModal" class="modal-backdrop" style="display:none;">
+    <div class="modal-box">
+        <h3>Rename Device</h3>
+        <div class="form-group">
+            <label>Device Name <span class="field-hint">(max 15 characters)</span></label>
+            <input type="text" id="renameInput" class="form-control"
+                   maxlength="15" placeholder="Enter device name">
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-primary" id="renameSaveBtn">Save</button>
+            <button class="btn btn-cancel" id="renameCancelBtn">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Ping watchdog modal -->
+<div id="watchdogModal" class="modal-backdrop" style="display:none;">
+    <div class="modal-box">
+        <h3 id="watchdogModalTitle">Ping Watchdog</h3>
+        <p class="modal-hint">
+            When enabled and the device is ON, the ESP32 pings the target IP every
+            <em>interval</em> seconds. If no reply is received the device is
+            power-cycled (5 s off → back on). No action while the device is OFF.
+        </p>
+        <div class="modal-row">
+            <label class="modal-toggle-label">
+                <span>Enable ping watchdog</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="wdEnable" onchange="onWdEnableChange()">
+                    <span class="toggle-slider"></span>
+                </label>
+            </label>
+        </div>
+        <div id="wdFields" style="display:none;">
+            <div class="form-group">
+                <label>Target IP Address</label>
+                <input type="text" id="wdIp" class="form-control"
+                       placeholder="192.168.1.100" maxlength="15">
+            </div>
+            <div class="form-group">
+                <label>Check Interval (sec)</label>
+                <input type="number" id="wdInterval" class="form-control"
+                       min="5" max="255" value="30">
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-primary" id="wdSaveBtn">Save</button>
+            <button class="btn btn-cancel" id="wdCancelBtn">Cancel</button>
+        </div>
     </div>
 </div>
 
@@ -40,92 +126,268 @@
     (async function initDashboard() {
         await loadDeviceConfig();
         await renderDevices();
+        startStatusPoll();
     })();
 
-    // ── Device config (max devices + available pins) ───────────────────
+    // ── Background status poll ────────────────────────────────────────
+    // Polls /api/devices + /api/devices/automation every 5 s and patches
+    // existing cards in-place so automation state changes are reflected
+    // without rebuilding the DOM (no flicker, modals stay open).
+    function startStatusPoll() {
+        setInterval(async () => {
+            const [devResult, autoResult] = await Promise.all([
+                api.getDevices(),
+                api.getDeviceAutomation()
+            ]);
+            if (!devResult.success) return;
+
+            // Rebuild automation map
+            if (autoResult.success && autoResult.data.success)
+                autoResult.data.automations.forEach(a => { _automationMap[a.index] = a; });
+
+            devResult.data.devices.forEach(d => {
+                const card = document.getElementById('card-' + d.index);
+                if (!card) return;   // card not rendered yet
+
+                // ── ON/OFF state ──────────────────────────────────────
+                const isOn = d.state === true || d.state === 1;
+                card.classList.toggle('device-on', isOn);
+                const cb = card.querySelector('input[type="checkbox"]');
+                if (cb) cb.checked = isOn;
+
+                // ── Automation badge + cycle bar ──────────────────────
+                const auto = _automationMap[d.index] || {};
+                const cycling = !!auto.cycling;
+
+                card.classList.toggle('device-cycling', cycling);
+
+                const metaEl = card.querySelector('.device-meta');
+                if (metaEl) {
+                    const existingBadge = metaEl.querySelector('.auto-badge');
+                    const newBadge = cycling
+                        ? '<span class="auto-badge auto-cycling">⟳ Cycling</span>'
+                        : (auto.autoEnabled ? '<span class="auto-badge auto-on">⚡ Auto</span>' : '');
+                    if (existingBadge) existingBadge.outerHTML = newBadge || '';
+                    else if (newBadge) metaEl.insertAdjacentHTML('beforeend', newBadge);
+                }
+
+                const bar = document.getElementById('cycle-bar-' + d.index);
+                if (bar) bar.style.display = cycling ? '' : 'none';
+            });
+        }, 5000);
+    }
+
+    // ── Device config ─────────────────────────────────────────────────
     async function loadDeviceConfig() {
         const result = await api.getDeviceConfig();
         if (!result.success) return;
-
-        const cfg        = result.data;
-        const atMax      = cfg.currentDevices >= cfg.maxDevices;
-        const addBtn     = document.getElementById('toggleAddForm');
-        const pinSelect  = document.getElementById('newDevicePin');
-        const voltageSelect = document.getElementById('newDeviceVoltage');
-
-        // Hide or show the Add button based on capacity
-        if (atMax) {
-            addBtn.disabled = true;
-            addBtn.textContent = '+ Add Device (limit reached)';
-            addBtn.title = `Maximum of ${cfg.maxDevices} devices reached`;
-        } else {
-            addBtn.disabled = false;
-            addBtn.textContent = '+ Add Device';
-            addBtn.title = '';
-        }
-
-        populateAvailablePins(cfg, voltageSelect.value);
+        const cfg = result.data;
+        const atMax = cfg.currentDevices >= cfg.maxDevices;
+        const addBtn = document.getElementById('toggleAddForm');
+        addBtn.disabled    = atMax;
+        addBtn.textContent = atMax ? '+ Add Device (limit reached)' : '+ Add Device';
+        addBtn.title       = atMax ? `Maximum of ${cfg.maxDevices} devices reached` : '';
+        populateAvailablePins(cfg, document.getElementById('newDeviceVoltage').value);
     }
 
     function populateAvailablePins(cfg, voltage) {
-        const pinSelect = document.getElementById('newDevicePin');
         const pins = voltage === 'high' ? cfg.availableHighVoltagePins : cfg.availableLowVoltagePins;
-        if (pins.length === 0) {
-            pinSelect.innerHTML = '<option value="">No pins available</option>';
-        } else {
-            pinSelect.innerHTML = pins
-                .map(p => `<option value="${p}">GPIO ${p}</option>`)
-                .join('');
-        }
+        const sel  = document.getElementById('newDevicePin');
+        sel.innerHTML = pins.length === 0
+            ? '<option value="">No pins available</option>'
+            : pins.map(p => `<option value="${p}">GPIO ${p}</option>`).join('');
     }
 
     // ── Device rendering ──────────────────────────────────────────────
+    let _automationMap = {};
+
     async function renderDevices() {
         const result = await api.getDevices();
-        const grid   = document.getElementById('deviceGrid');
+        const grid = document.getElementById('deviceGrid');
         if (!result.success) {
             grid.innerHTML = '<div class="alert alert-danger">Failed to load devices</div>';
             return;
         }
         const devices = result.data.devices;
+
+        const autoResult = await api.getDeviceAutomation();
+        _automationMap = {};
+        if (autoResult.success && autoResult.data.success)
+            autoResult.data.automations.forEach(a => { _automationMap[a.index] = a; });
+
         const config = await api.getDeviceConfig();
         const highPins = config.success ? config.data.highVoltagePins : [];
         const highDevices = devices.filter(d => highPins.includes(d.pin));
-        const lowDevices = devices.filter(d => !highPins.includes(d.pin));
+        const lowDevices  = devices.filter(d => !highPins.includes(d.pin));
         grid.innerHTML = renderVoltageSection('High Voltage Devices', highDevices)
-            + renderVoltageSection('Low Voltage Devices', lowDevices);
+                       + renderVoltageSection('Low Voltage Devices',  lowDevices);
+
+        document.addEventListener('click', closeAllMenus, { once: true });
     }
 
     function renderVoltageSection(title, devices) {
         const cards = devices.length === 0
             ? '<div class="voltage-empty">No devices</div>'
-            : devices.map(d => `
-                <div class="device-card ${d.state ? 'device-on' : ''}" id="card-${d.index}">
-                    <div class="device-info">
-                        <div class="device-name">${escHtml(d.name)}</div>
-                        <div class="device-pin">GPIO ${d.pin}</div>
-                    </div>
-                    <div class="device-controls">
-                        <label class="toggle-switch">
-                            <input type="checkbox" ${d.state ? 'checked' : ''} onchange="toggleDevice(${d.index}, this.checked)">
-                            <span class="toggle-slider"></span>
-                        </label>
-                        <button class="btn-remove" onclick="removeDevice(${d.index})" title="Remove">&#10005;</button>
-                    </div>
-                </div>
-            `).join('');
+            : devices.map(d => renderDeviceCard(d)).join('');
         return `<section class="voltage-section"><h3>${title}</h3><div class="device-grid">${cards}</div></section>`;
     }
 
+    function renderDeviceCard(d) {
+        const auto = _automationMap[d.index] || { autoEnabled: false, pingInterval: 30, pingIp: '', cycling: false };
+        const badge = auto.cycling
+            ? '<span class="auto-badge auto-cycling">⟳ Cycling</span>'
+            : (auto.autoEnabled ? '<span class="auto-badge auto-on">⚡ Auto</span>' : '');
+
+        return `
+            <div class="device-card ${d.state ? 'device-on' : ''} ${auto.cycling ? 'device-cycling' : ''}" id="card-${d.index}">
+                <div class="card-main">
+                    <div class="device-info">
+                        <div class="device-name">${escHtml(d.name)}</div>
+                        <div class="device-meta">
+                            <span class="device-pin">GPIO ${d.pin}</span>
+                            ${badge}
+                        </div>
+                    </div>
+                    <div class="device-controls">
+                        <label class="toggle-switch">
+                            <input type="checkbox" ${d.state ? 'checked' : ''}
+                                   onchange="toggleDevice(${d.index}, this.checked)">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <div class="card-menu-wrap">
+                            <button class="btn-dots" title="More options"
+                                    onclick="toggleCardMenu(event, ${d.index})">&#8942;</button>
+                            <div class="card-menu" id="menu-${d.index}">
+                                <button class="card-menu-item" onclick="openRenameModal(${d.index})">
+                                    ✏ Rename
+                                </button>
+                                <button class="card-menu-item" onclick="openWatchdogModal(${d.index})">
+                                    ⚡ Ping Watchdog
+                                </button>
+                                <div class="card-menu-divider"></div>
+                                <button class="card-menu-item card-menu-danger" onclick="removeDevice(${d.index})">
+                                    ✕ Remove Device
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-cycle-bar" id="cycle-bar-${d.index}" ${auto.cycling ? '' : 'style="display:none;"'}></div>
+                </div>
+            </div>`;
+    }
+
+    // ── 3-dot dropdown ────────────────────────────────────────────────
+    function toggleCardMenu(e, index) {
+        e.stopPropagation();
+        const menu = document.getElementById('menu-' + index);
+        const isOpen = menu.classList.contains('open');
+        closeAllMenus();
+        if (!isOpen) {
+            menu.classList.add('open');
+            setTimeout(() => document.addEventListener('click', closeAllMenus, { once: true }), 0);
+        }
+    }
+
+    function closeAllMenus() {
+        document.querySelectorAll('.card-menu.open').forEach(m => m.classList.remove('open'));
+    }
+
+    // ── Rename modal ──────────────────────────────────────────────────
+    let _renameDeviceIndex = -1;
+
+    function openRenameModal(index) {
+        closeAllMenus();
+        _renameDeviceIndex = index;
+        const nameEl = document.querySelector(`#card-${index} .device-name`);
+        document.getElementById('renameInput').value = nameEl ? nameEl.textContent.trim() : '';
+        document.getElementById('renameModal').style.display = 'flex';
+        setTimeout(() => { const i = document.getElementById('renameInput'); i.focus(); i.select(); }, 50);
+    }
+
+    document.getElementById('renameCancelBtn').addEventListener('click', () => {
+        document.getElementById('renameModal').style.display = 'none';
+    });
+    document.getElementById('renameModal').addEventListener('click', function(e) {
+        if (e.target === this) this.style.display = 'none';
+    });
+    document.getElementById('renameInput').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') document.getElementById('renameSaveBtn').click();
+    });
+    document.getElementById('renameSaveBtn').addEventListener('click', async function () {
+        const name = document.getElementById('renameInput').value.trim();
+        if (!name) { Utils.showAlert('Name cannot be empty', 'danger'); return; }
+        if (name.length > 15) { Utils.showAlert('Name must be 15 characters or fewer', 'danger'); return; }
+        this.disabled = true; this.textContent = 'Saving...';
+        const result = await api.renameDevice(_renameDeviceIndex, name);
+        this.disabled = false; this.textContent = 'Save';
+        if (result.success && result.data.success) {
+            document.getElementById('renameModal').style.display = 'none';
+            const nameEl = document.querySelector(`#card-${_renameDeviceIndex} .device-name`);
+            if (nameEl) nameEl.textContent = result.data.name;
+        } else {
+            Utils.showAlert(result.data && result.data.message || 'Failed to rename', 'danger');
+        }
+    });
+
+    // ── Watchdog modal ────────────────────────────────────────────────
+    let _wdDeviceIndex = -1;
+
+    function openWatchdogModal(index) {
+        closeAllMenus();
+        _wdDeviceIndex = index;
+        const auto = _automationMap[index] || { autoEnabled: false, pingInterval: 30, pingIp: '' };
+        const d = document.querySelector(`#card-${index} .device-name`);
+        document.getElementById('watchdogModalTitle').textContent =
+            '⚡ Ping Watchdog — ' + (d ? d.textContent.trim() : 'Device');
+        document.getElementById('wdEnable').checked = !!auto.autoEnabled;
+        document.getElementById('wdIp').value = auto.pingIp || '';
+        document.getElementById('wdInterval').value = auto.pingInterval || 30;
+        document.getElementById('wdFields').style.display = auto.autoEnabled ? '' : 'none';
+        document.getElementById('watchdogModal').style.display = 'flex';
+    }
+
+    function onWdEnableChange() {
+        document.getElementById('wdFields').style.display =
+            document.getElementById('wdEnable').checked ? '' : 'none';
+    }
+
+    document.getElementById('wdCancelBtn').addEventListener('click', () => {
+        document.getElementById('watchdogModal').style.display = 'none';
+    });
+    document.getElementById('watchdogModal').addEventListener('click', function(e) {
+        if (e.target === this) this.style.display = 'none';
+    });
+    document.getElementById('wdSaveBtn').addEventListener('click', async function () {
+        const enabled  = document.getElementById('wdEnable').checked;
+        const ip       = document.getElementById('wdIp').value.trim();
+        const interval = parseInt(document.getElementById('wdInterval').value, 10);
+        if (enabled) {
+            if (!ip || !/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) {
+                Utils.showAlert('Enter a valid IP address', 'danger'); return;
+            }
+            if (isNaN(interval) || interval < 5 || interval > 255) {
+                Utils.showAlert('Interval must be 5–255 seconds', 'danger'); return;
+            }
+        }
+        this.disabled = true; this.textContent = 'Saving...';
+        const result = await api.saveDeviceAutomation(
+            _wdDeviceIndex, enabled, enabled ? interval : 30, enabled ? ip : '');
+        this.disabled = false; this.textContent = 'Save';
+        if (result.success && result.data.success) {
+            document.getElementById('watchdogModal').style.display = 'none';
+            await renderDevices();
+            Utils.showAlert('Watchdog settings saved', 'success');
+        } else {
+            Utils.showAlert(result.data && result.data.message || 'Failed to save', 'danger');
+        }
+    });
+
+    // ── Toggle / remove ───────────────────────────────────────────────
     async function toggleDevice(index, state) {
-        // Optimistic UI: apply the new state immediately so the card
-        // background and name colour change in sync with the toggle knob.
         const card = document.getElementById('card-' + index);
         if (card) card.classList.toggle('device-on', state);
-
         const result = await api.toggleDevice(index, state);
         if (!result.success || !result.data.success) {
-            // Revert the optimistic update on failure
             if (card) card.classList.toggle('device-on', !state);
             const cb = card && card.querySelector('input[type="checkbox"]');
             if (cb) cb.checked = !state;
@@ -134,21 +396,47 @@
     }
 
     async function removeDevice(index) {
+        closeAllMenus();
         if (!confirm('Remove this device?')) return;
         const result = await api.removeDevice(index);
         if (result.success && result.data.success) {
             await renderDevices();
-            await loadDeviceConfig();   // refresh available pins after removal
+            await loadDeviceConfig();
         } else {
             Utils.showAlert('Failed to remove device', 'danger');
         }
     }
 
-    document.getElementById('toggleAddForm').addEventListener('click', function () {
-        const form = document.getElementById('addDeviceForm');
-        const show = form.style.display === 'none';
-        form.style.display = show ? 'block' : 'none';
-        this.textContent = show ? '✕ Cancel' : '+ Add Device';
+    // ── Add device modal ──────────────────────────────────────────────
+    function resetAddForm() {
+        document.getElementById('newDeviceName').value = '';
+        document.getElementById('newDeviceVoltage').value = 'high';
+        document.getElementById('addAutoEnable').checked = false;
+        document.getElementById('addAutoFields').style.display = 'none';
+        document.getElementById('addAutoIp').value = '';
+        document.getElementById('addAutoInterval').value = 30;
+    }
+
+    function onAddAutoToggle() {
+        document.getElementById('addAutoFields').style.display =
+            document.getElementById('addAutoEnable').checked ? '' : 'none';
+    }
+
+    document.getElementById('toggleAddForm').addEventListener('click', async function () {
+        if (this.disabled) return;
+        resetAddForm();
+        // Refresh pins against current config before opening
+        const result = await api.getDeviceConfig();
+        if (result.success) populateAvailablePins(result.data, document.getElementById('newDeviceVoltage').value);
+        document.getElementById('addDeviceModal').style.display = 'flex';
+        setTimeout(() => document.getElementById('newDeviceName').focus(), 50);
+    });
+
+    document.getElementById('addDeviceCancelBtn').addEventListener('click', () => {
+        document.getElementById('addDeviceModal').style.display = 'none';
+    });
+    document.getElementById('addDeviceModal').addEventListener('click', function(e) {
+        if (e.target === this) this.style.display = 'none';
     });
 
     document.getElementById('newDeviceVoltage').addEventListener('change', async function () {
@@ -156,23 +444,37 @@
         if (result.success) populateAvailablePins(result.data, this.value);
     });
 
+    document.getElementById('newDeviceName').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') document.getElementById('addDeviceBtn').click();
+    });
+
     document.getElementById('addDeviceBtn').addEventListener('click', async function () {
-        const name = document.getElementById('newDeviceName').value.trim();
+        const name    = document.getElementById('newDeviceName').value.trim();
         const voltage = document.getElementById('newDeviceVoltage').value;
-        const pinEl = document.getElementById('newDevicePin');
-        const pin  = parseInt(pinEl.value, 10);
+        const pin     = parseInt(document.getElementById('newDevicePin').value, 10);
+        const autoOn  = document.getElementById('addAutoEnable').checked;
+        const autoIp  = document.getElementById('addAutoIp').value.trim();
+        const autoInt = parseInt(document.getElementById('addAutoInterval').value, 10);
+
         if (!name) { Utils.showAlert('Device name is required', 'danger'); return; }
         if (isNaN(pin)) { Utils.showAlert('Select a GPIO pin', 'danger'); return; }
-        this.disabled = true;
-        this.textContent = 'Adding...';
+        if (autoOn) {
+            if (!autoIp || !/^\d{1,3}(\.\d{1,3}){3}$/.test(autoIp)) {
+                Utils.showAlert('Enter a valid watchdog IP address', 'danger'); return;
+            }
+            if (isNaN(autoInt) || autoInt < 5 || autoInt > 255) {
+                Utils.showAlert('Watchdog interval must be 5–255 seconds', 'danger'); return;
+            }
+        }
+
+        this.disabled = true; this.textContent = 'Adding...';
         const result = await api.addDevice(name, pin, voltage);
-        this.disabled = false;
-        this.textContent = 'Add Device';
+        this.disabled = false; this.textContent = 'Add Device';
+
         if (result.success && result.data.success) {
-            document.getElementById('newDeviceName').value = '';
-            document.getElementById('addDeviceForm').style.display = 'none';
-            document.getElementById('toggleAddForm').textContent = '+ Add Device';
-            await loadDeviceConfig();   // refresh available pins after add
+            if (autoOn) await api.saveDeviceAutomation(result.data.index, true, autoInt, autoIp);
+            document.getElementById('addDeviceModal').style.display = 'none';
+            await loadDeviceConfig();
             await renderDevices();
         } else {
             Utils.showAlert(result.data && result.data.message || 'Failed to add device', 'danger');
@@ -180,6 +482,6 @@
     });
 
     function escHtml(s) {
-        return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
 </script>

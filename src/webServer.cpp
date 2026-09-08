@@ -14,6 +14,7 @@
 // Device state and admin auth owned by the .ino
 extern Device       devices[];
 extern uint8_t      deviceCount;
+extern bool         pingCyclingActive[];
 extern void         saveDevicesToEEPROM();
 extern void         updateOledDeviceStatus();
 extern char         adminPassword[];
@@ -658,6 +659,82 @@ char* apiDevicesRemoveHandlerHook(httpd_req_t *req) {
     return out;
 }
 
+// GET /api/devices/automation  — returns automation config for all devices
+char* apiDevicesAutomationHandlerHook(httpd_req_t *req) {
+    if (!isAuthorised(req)) { sendUnauthorised(req); return nullptr; }
+    cJSON *response = cJSON_CreateObject();
+    cJSON *list = cJSON_CreateArray();
+    for (uint8_t i = 0; i < deviceCount; i++) {
+        cJSON *d = cJSON_CreateObject();
+        cJSON_AddNumberToObject(d, "index",        i);
+        cJSON_AddBoolToObject(d,   "autoEnabled",  devices[i].autoEnabled == 1);
+        cJSON_AddNumberToObject(d, "pingInterval", devices[i].pingInterval);
+        cJSON_AddStringToObject(d, "pingIp",       devices[i].pingIp);
+        cJSON_AddBoolToObject(d,   "cycling",      pingCyclingActive[i]);
+        cJSON_AddItemToArray(list, d);
+    }
+    cJSON_AddBoolToObject(response, "success", true);
+    cJSON_AddItemToObject(response, "automations", list);
+    char *out = cJSON_Print(response);
+    cJSON_Delete(response);
+    return out;
+}
+
+// POST /api/devices/automation/save  { "index": 0, "autoEnabled": true, "pingInterval": 30, "pingIp": "192.168.1.1" }
+char* apiDevicesAutomationSaveHandlerHook(httpd_req_t *req) {
+    if (!isAuthorised(req)) { sendUnauthorised(req); return nullptr; }
+    char *jsonData = getContentFromReq(req);
+    cJSON *json = jsonData ? cJSON_Parse(jsonData) : NULL;
+    free(jsonData);
+    cJSON *response = cJSON_CreateObject();
+
+    if (!json) {
+        cJSON_AddBoolToObject(response, "success", false);
+        cJSON_AddStringToObject(response, "message", "Invalid JSON");
+    } else {
+        cJSON *idx_j      = cJSON_GetObjectItem(json, "index");
+        cJSON *enable_j   = cJSON_GetObjectItem(json, "autoEnabled");
+        cJSON *interval_j = cJSON_GetObjectItem(json, "pingInterval");
+        cJSON *ip_j       = cJSON_GetObjectItem(json, "pingIp");
+
+        if (!cJSON_IsNumber(idx_j) || !cJSON_IsBool(enable_j) ||
+            !cJSON_IsNumber(interval_j) || !cJSON_IsString(ip_j)) {
+            cJSON_AddBoolToObject(response, "success", false);
+            cJSON_AddStringToObject(response, "message", "index, autoEnabled, pingInterval, pingIp required");
+        } else {
+            int idx      = (int)idx_j->valuedouble;
+            bool enabled = cJSON_IsTrue(enable_j);
+            int interval = (int)interval_j->valuedouble;
+            const char *ip = ip_j->valuestring;
+
+            if (idx < 0 || idx >= (int)deviceCount) {
+                cJSON_AddBoolToObject(response, "success", false);
+                cJSON_AddStringToObject(response, "message", "Index out of range");
+            } else if (enabled && (interval < 5 || interval > 255)) {
+                cJSON_AddBoolToObject(response, "success", false);
+                cJSON_AddStringToObject(response, "message", "pingInterval must be 5–255 seconds");
+            } else if (enabled && (strlen(ip) == 0 || strlen(ip) >= PING_IP_LEN)) {
+                cJSON_AddBoolToObject(response, "success", false);
+                cJSON_AddStringToObject(response, "message", "pingIp must be a valid IP address (max 15 chars)");
+            } else {
+                devices[idx].autoEnabled  = enabled ? 1 : 0;
+                devices[idx].pingInterval = (uint8_t)(enabled ? interval : devices[idx].pingInterval);
+                if (enabled) {
+                    strncpy(devices[idx].pingIp, ip, PING_IP_LEN - 1);
+                    devices[idx].pingIp[PING_IP_LEN - 1] = '\0';
+                }
+                saveDevicesToEEPROM();
+                cJSON_AddBoolToObject(response, "success", true);
+                cJSON_AddStringToObject(response, "message", enabled ? "Automation settings saved" : "Automation disabled");
+            }
+        }
+        cJSON_Delete(json);
+    }
+    char *out = cJSON_Print(response);
+    cJSON_Delete(response);
+    return out;
+}
+
 // POST /api/devices/toggle  { "index": 0, "state": true }
 char* apiDevicesToggleHandlerHook(httpd_req_t *req) {
     if (!isAuthorised(req)) { sendUnauthorised(req); return nullptr; }
@@ -694,6 +771,55 @@ char* apiDevicesToggleHandlerHook(httpd_req_t *req) {
         } else {
             cJSON_AddBoolToObject(response, "success", false);
             cJSON_AddStringToObject(response, "message", "index (number) and state (bool) required");
+        }
+        cJSON_Delete(json);
+    }
+
+    char *out = cJSON_Print(response);
+    cJSON_Delete(response);
+    return out;
+}
+
+// POST /api/devices/rename  { "index": 0, "name": "New Name" }
+char* apiDevicesRenameHandlerHook(httpd_req_t *req) {
+    if (!isAuthorised(req)) { sendUnauthorised(req); return nullptr; }
+
+    char *jsonData = getContentFromReq(req);
+    cJSON *json = jsonData ? cJSON_Parse(jsonData) : NULL;
+    free(jsonData);
+    cJSON *response = cJSON_CreateObject();
+
+    if (!json) {
+        cJSON_AddBoolToObject(response, "success", false);
+        cJSON_AddStringToObject(response, "message", "Invalid JSON");
+    } else {
+        cJSON *idx_j  = cJSON_GetObjectItem(json, "index");
+        cJSON *name_j = cJSON_GetObjectItem(json, "name");
+
+        if (!cJSON_IsNumber(idx_j) || !cJSON_IsString(name_j)) {
+            cJSON_AddBoolToObject(response, "success", false);
+            cJSON_AddStringToObject(response, "message", "index (number) and name (string) required");
+        } else {
+            int idx = (int)idx_j->valuedouble;
+            const char *newName = name_j->valuestring;
+            size_t nameLen = strlen(newName);
+
+            if (idx < 0 || idx >= (int)deviceCount) {
+                cJSON_AddBoolToObject(response, "success", false);
+                cJSON_AddStringToObject(response, "message", "Index out of range");
+            } else if (nameLen == 0 || nameLen >= DEVICE_NAME_LEN) {
+                cJSON_AddBoolToObject(response, "success", false);
+                cJSON_AddStringToObject(response, "message", "Name must be 1–15 characters");
+            } else {
+                strncpy(devices[idx].name, newName, DEVICE_NAME_LEN - 1);
+                devices[idx].name[DEVICE_NAME_LEN - 1] = '\0';
+                saveDevicesToEEPROM();
+                updateOledDeviceStatus();
+                cJSON_AddBoolToObject(response, "success", true);
+                cJSON_AddStringToObject(response, "message", "Device renamed");
+                cJSON_AddNumberToObject(response, "index", idx);
+                cJSON_AddStringToObject(response, "name", devices[idx].name);
+            }
         }
         cJSON_Delete(json);
     }

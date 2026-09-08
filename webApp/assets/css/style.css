@@ -383,8 +383,8 @@ a:hover { text-decoration: underline; }
 /* ── Device grid ─────────────────────────────────────────────────────────── */
 .device-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
     margin-bottom: 20px;
 }
 #deviceGrid { display: block; }
@@ -392,31 +392,60 @@ a:hover { text-decoration: underline; }
 .voltage-section h3 {
     margin: 0 0 10px;
     color: var(--text-muted);
-    font-size: 14px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
 }
 .voltage-section .device-grid { margin-bottom: 22px; }
 .voltage-empty {
     color: var(--text-faint);
     font-size: 13px;
-    padding: 14px 0;
+    padding: 10px 0;
 }
 
 .device-card {
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 14px 16px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    min-width: 0;
     transition: border-color 0.2s, background 0.2s;
 }
 .device-card.device-on {
     background: var(--green-light);
     border-color: var(--green-border);
 }
+.device-card.device-cycling {
+    border-color: var(--yellow-border);
+}
 
-.device-info { flex: 1; min-width: 0; }
+/* card-main is the actual content row; position:relative anchors the cycle-bar */
+.card-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 12px 14px;
+    position: relative;
+    overflow: visible;
+}
+
+/* Cycle-bar: absolute overlay at the bottom edge — does NOT add height */
+.card-cycle-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--yellow);
+    animation: pulse 1s infinite;
+    pointer-events: none;
+}
+
+.device-info {
+    flex: 1;
+    min-width: 0;
+}
 
 .device-name {
     font-size: 14px;
@@ -426,21 +455,29 @@ a:hover { text-decoration: underline; }
     overflow: hidden;
     text-overflow: ellipsis;
     transition: color 0.2s;
+    line-height: 1.3;
 }
 .device-card.device-on .device-name { color: var(--green); }
+
+/* Badge sits on its own row below the name */
+.device-meta {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 3px;
+}
 
 .device-pin {
     font-size: 11px;
     color: var(--text-faint);
-    margin-top: 2px;
+    white-space: nowrap;
 }
 
 .device-controls {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     flex-shrink: 0;
-    margin-left: 10px;
 }
 
 /* ── Toggle switch ───────────────────────────────────────────────────────── */
@@ -476,21 +513,143 @@ a:hover { text-decoration: underline; }
 .toggle-switch input:checked + .toggle-slider { background: var(--toggle-on); }
 .toggle-switch input:checked + .toggle-slider::before { transform: translateX(20px); }
 
-/* ── Remove button ───────────────────────────────────────────────────────── */
-.btn-remove {
+/* ── Automation badge ────────────────────────────────────────────────────── */
+.auto-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 20px;
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+    flex-shrink: 0;
+}
+.auto-on      { background: var(--blue-light);  color: var(--blue);   border: 1px solid var(--blue-border); }
+.auto-cycling { background: var(--yellow-light); color: var(--yellow); border: 1px solid var(--yellow-border); animation: pulse 1s infinite; }
+
+/* ── 3-dot card menu ─────────────────────────────────────────────────────── */
+.card-menu-wrap {
+    position: relative;
+}
+
+.btn-dots {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
     background: none;
     border: none;
-    color: var(--border);
-    font-size: 14px;
-    cursor: pointer;
-    padding: 3px 5px;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
+    color: var(--text-faint);
+    font-size: 18px;
     line-height: 1;
+    cursor: pointer;
     transition: color 0.15s;
+    flex-shrink: 0;
+    padding: 0;
 }
-.btn-remove:hover { color: var(--red); }
+.btn-dots:hover { color: var(--text); }
+
+.card-menu {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 4px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-lg);
+    min-width: 160px;
+    z-index: 100;
+    overflow: hidden;
+}
+.card-menu.open { display: block; }
+
+.card-menu-item {
+    display: block;
+    width: 100%;
+    padding: 10px 14px;
+    background: none;
+    border: none;
+    text-align: left;
+    font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+    transition: background 0.12s;
+    white-space: nowrap;
+}
+.card-menu-item:hover { background: var(--surface-2); }
+.card-menu-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 0;
+}
+.card-menu-danger { color: var(--red); }
+.card-menu-danger:hover { background: var(--red-light); }
+
+/* ── Field hint (small muted label suffix) ───────────────────────────────── */
+.field-hint {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text-faint);
+    text-transform: none;
+    letter-spacing: 0;
+    margin-left: 4px;
+}
+
+/* ── Watchdog modal extras ───────────────────────────────────────────────── */
+.modal-hint {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin: -4px 0 18px;
+    line-height: 1.6;
+    border-left: 3px solid var(--blue-border);
+    padding-left: 10px;
+}
+.modal-row {
+    margin-bottom: 16px;
+}
+.modal-toggle-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    cursor: pointer;
+}
 
 /* ── Add device section ──────────────────────────────────────────────────── */
+/* ── Add-form watchdog section ───────────────────────────────────────────── */
+.add-watchdog-row {
+    margin: 4px 0 12px;
+    padding: 10px 12px;
+    background: var(--surface-3);
+    border-radius: var(--radius-sm);
+}
+.add-watchdog-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    cursor: pointer;
+}
+.add-watchdog-fields {
+    margin-bottom: 12px;
+}
+.form-row-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+@media (max-width: 460px) { .form-row-2 { grid-template-columns: 1fr; } }
+
 .add-device-section { margin-bottom: 18px; }
 
 .btn-add {
@@ -506,23 +665,6 @@ a:hover { text-decoration: underline; }
     transition: background 0.15s, border-color 0.15s;
 }
 .btn-add:hover { background: var(--green-light); border-color: var(--green); }
-
-.add-form {
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 16px;
-    margin-top: 10px;
-}
-.add-form h3 { margin: 0 0 14px; font-size: 14px; color: var(--text-muted); }
-
-.form-row {
-    display: grid;
-    grid-template-columns: 1fr 130px 110px;
-    gap: 10px;
-    margin-bottom: 12px;
-}
-@media (max-width: 460px) { .form-row { grid-template-columns: 1fr; } }
 
 /* ── Empty state ─────────────────────────────────────────────────────────── */
 .empty-state {
@@ -669,6 +811,10 @@ a:hover { text-decoration: underline; }
     width: 100%;
     max-width: 360px;
     box-shadow: var(--shadow-lg);
+}
+/* Wider variant for forms with multiple columns (e.g. Add Device) */
+.modal-box-md {
+    max-width: 480px;
 }
 
 .modal-box h3 {
