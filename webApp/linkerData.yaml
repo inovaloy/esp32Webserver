@@ -56,6 +56,20 @@ contentTypes: &contentTypes
 
 # Static Assets - CSS, JavaScript and media files
 # Frontend resources served with appropriate MIME types for web interface styling and functionality
+"/favicon.png" :
+    rtnType    : *rtnASSET
+    fileName   : "image/webLogo.png"
+    macro      : "FAVICON_PNG"
+    contentType: *pngType
+    reqType    : *httpGET
+
+"/apple-touch-icon.png" :
+    rtnType    : *rtnASSET
+    fileName   : "image/webLogo.png"
+    macro      : "APPLE_TOUCH_ICON_PNG"
+    contentType: *pngType
+    reqType    : *httpGET
+
 "/css/style.css" :
     rtnType    : *rtnASSET
     fileName   : "css/style.css"
