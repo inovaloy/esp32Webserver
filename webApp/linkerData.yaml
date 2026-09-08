@@ -151,9 +151,21 @@ contentTypes: &contentTypes
     rtnType: *rtnJSON
     reqType: *httpPOST
 
+"/api/devices/rename" :
+    rtnType: *rtnJSON
+    reqType: *httpPOST
+
 "/api/device-config" :
     rtnType: *rtnJSON
     reqType: *httpGET
+
+"/api/devices/automation" :
+    rtnType: *rtnJSON
+    reqType: *httpGET
+
+"/api/devices/automation/save" :
+    rtnType: *rtnJSON
+    reqType: *httpPOST
 
 "/api/reboot" :
     rtnType: *rtnJSON

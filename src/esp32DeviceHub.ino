@@ -3,6 +3,8 @@
 #include <ETH.h>
 #include <DNSServer.h>
 #include <EEPROM.h>
+#include <ping/ping_sock.h>
+#include <freertos/semphr.h>
 #include "autoGen/autoGenWebServer.h"
 #include "autoGen/autoGenOledLogo.h"   // bootLogo[], BOOT_LOGO_W, BOOT_LOGO_H
 #include "deviceConfig.h"
@@ -22,7 +24,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // WiFi Configuration
 #define WIFI_TIMEOUT 20000
-#define EEPROM_SIZE 512
+#define EEPROM_SIZE 600    // AT25LC64 = 8192 bytes; internal flash emulation needs >=534
 #define SSID_ADDR 0
 #define PASS_ADDR 100
 #define MAX_SSID_LENGTH 32
@@ -186,6 +188,7 @@ void applyOledSettings();
 void factoryResetSettings();
 void checkFactoryResetButton();
 void checkOledPageButton();
+void checkDeviceAutomation();
 uint8_t storageRead(int address);
 void storageWrite(int address, uint8_t value);
 void storageCommit();
@@ -283,6 +286,7 @@ void loop()
     checkOledPageButton();
     checkEthernetAvailability();
     checkWiFiAvailability();
+    checkDeviceAutomation();
     if ((activeNetwork == NetworkType::EthernetDHCP || activeNetwork == NetworkType::EthernetStatic) && !ETH.linkUp()) {
         if (ethernetLinkDownSince == 0) ethernetLinkDownSince = millis();
         if (!ethernetFailoverHandled && millis() - ethernetLinkDownSince >= 1000) {
@@ -747,12 +751,20 @@ void loadDevicesFromEEPROM() {
         for (int j = 0; j < DEVICE_NAME_LEN; j++)
             devices[i].name[j] = storageRead(base + j);
         devices[i].name[DEVICE_NAME_LEN - 1] = '\0';
-        devices[i].pin   = storageRead(base + DEVICE_NAME_LEN);
-        devices[i].state = storageRead(base + DEVICE_NAME_LEN + 1);
+        devices[i].pin          = storageRead(base + DEVICE_NAME_LEN);
+        devices[i].state        = storageRead(base + DEVICE_NAME_LEN + 1);
+        uint8_t ae              = storageRead(base + DEVICE_NAME_LEN + 2);
+        devices[i].autoEnabled  = (ae == 1) ? 1 : 0;
+        uint8_t pi              = storageRead(base + DEVICE_NAME_LEN + 3);
+        devices[i].pingInterval = (pi >= 5) ? pi : 30;
+        for (int j = 0; j < PING_IP_LEN; j++)
+            devices[i].pingIp[j] = (char)storageRead(base + DEVICE_NAME_LEN + 4 + j);
+        devices[i].pingIp[PING_IP_LEN - 1] = '\0';
         pinMode(devices[i].pin, OUTPUT);
         digitalWrite(devices[i].pin, devices[i].state ? HIGH : LOW);
-        Serial.printf("[EEPROM] device[%d]: name=%s pin=%d state=%d\r\n",
-                      i, devices[i].name, devices[i].pin, devices[i].state);
+        Serial.printf("[EEPROM] device[%d]: name=%s pin=%d state=%d auto=%d interval=%ds ip=%s\r\n",
+                      i, devices[i].name, devices[i].pin, devices[i].state,
+                      devices[i].autoEnabled, devices[i].pingInterval, devices[i].pingIp);
     }
 }
 
@@ -761,9 +773,13 @@ void saveDevicesToEEPROM() {
     for (uint8_t i = 0; i < deviceCount; i++) {
         int base = DEVICE_BASE_ADDR + i * DEVICE_SLOT_SIZE;
         for (int j = 0; j < DEVICE_NAME_LEN; j++)
-            storageWrite(base + j, devices[i].name[j]);
+            storageWrite(base + j, (uint8_t)devices[i].name[j]);
         storageWrite(base + DEVICE_NAME_LEN,     devices[i].pin);
         storageWrite(base + DEVICE_NAME_LEN + 1, devices[i].state);
+        storageWrite(base + DEVICE_NAME_LEN + 2, devices[i].autoEnabled);
+        storageWrite(base + DEVICE_NAME_LEN + 3, devices[i].pingInterval);
+        for (int j = 0; j < PING_IP_LEN; j++)
+            storageWrite(base + DEVICE_NAME_LEN + 4 + j, (uint8_t)devices[i].pingIp[j]);
     }
     storageWrite(EEPROM_MAGIC_ADDR, EEPROM_MAGIC_BYTE);
     // Do NOT call EEPROM.commit() here — this runs in the httpd FreeRTOS task,
@@ -771,6 +787,131 @@ void saveDevicesToEEPROM() {
     // Calling commit() from the wrong task silently does nothing on ESP32 Arduino.
     // Set the dirty flag instead; loop() will commit from the correct main task.
     eepromDirty = true;
+}
+
+// ── Ping-watchdog automation ───────────────────────────────────────────────
+// Per-device state for the ping watchdog (kept in RAM, not persisted).
+// Not static so webServer.cpp can read pingCyclingActive[] via extern.
+unsigned long pingLastCheckedAt[MAX_DEVICES] = {0};
+bool          pingCyclingActive[MAX_DEVICES] = {false};
+unsigned long pingCycleOffAt[MAX_DEVICES]    = {0};
+
+// ── Ping via esp_ping (IDF) ────────────────────────────────────────────────
+// The IDF esp_ping API works on any netif including W5500 Ethernet.
+// It is async with callbacks; we make it synchronous by blocking on a
+// FreeRTOS binary semaphore that the on_ping_end callback releases.
+
+struct PingResult {
+    SemaphoreHandle_t done;
+    bool replied;
+};
+
+static void _onPingSuccess(esp_ping_handle_t hdl, void *args) {
+    PingResult *r = (PingResult *)args;
+    r->replied = true;
+}
+static void _onPingTimeout(esp_ping_handle_t hdl, void *args) {
+    // replied stays false — timeout counts as no reply
+}
+static void _onPingEnd(esp_ping_handle_t hdl, void *args) {
+    PingResult *r = (PingResult *)args;
+    xSemaphoreGive(r->done);   // unblock pingHost()
+}
+
+// Sends one ICMP echo and blocks up to 3 s for a reply.
+// Works on WiFi, Ethernet (W5500), and any other active netif.
+static bool pingHost(const char* ipStr) {
+    IPAddress addr;
+    if (!addr.fromString(ipStr)) {
+        Serial.printf("[AUTO] pingHost: invalid IP '%s'\r\n", ipStr);
+        return false;
+    }
+
+    PingResult result;
+    result.done    = xSemaphoreCreateBinary();
+    result.replied = false;
+    if (!result.done) {
+        Serial.println("[AUTO] pingHost: semaphore alloc failed");
+        return false;
+    }
+
+    esp_ping_config_t cfg = ESP_PING_DEFAULT_CONFIG();
+    cfg.count       = 1;           // single echo
+    cfg.timeout_ms  = 2000;        // wait 2 s for reply
+    cfg.interval_ms = 100;
+    cfg.data_size   = 32;
+    // Target address — ip_addr_t needs network byte order for IPv4
+    IP_ADDR4(&cfg.target_addr,
+             addr[0], addr[1], addr[2], addr[3]);
+
+    esp_ping_callbacks_t cbs = {};
+    cbs.cb_args        = &result;
+    cbs.on_ping_success = _onPingSuccess;
+    cbs.on_ping_timeout = _onPingTimeout;
+    cbs.on_ping_end     = _onPingEnd;
+
+    esp_ping_handle_t hdl = nullptr;
+    esp_err_t err = esp_ping_new_session(&cfg, &cbs, &hdl);
+    if (err != ESP_OK || !hdl) {
+        Serial.printf("[AUTO] pingHost: esp_ping_new_session failed 0x%x\r\n", err);
+        vSemaphoreDelete(result.done);
+        return false;
+    }
+
+    esp_ping_start(hdl);
+
+    // Block until on_ping_end fires (max 3 s to be safe)
+    xSemaphoreTake(result.done, pdMS_TO_TICKS(3000));
+
+    esp_ping_stop(hdl);
+    esp_ping_delete_session(hdl);
+    vSemaphoreDelete(result.done);
+
+    Serial.printf("[AUTO] pingHost: %s -> %s\r\n", ipStr, result.replied ? "ALIVE" : "DEAD");
+    return result.replied;
+}
+
+void checkDeviceAutomation() {
+    unsigned long now = millis();
+
+    for (uint8_t i = 0; i < deviceCount; i++) {
+        // Complete a pending power-cycle: turn the pin back ON after 5 s off.
+        if (pingCyclingActive[i]) {
+            if (now - pingCycleOffAt[i] >= 5000UL) {
+                pingCyclingActive[i] = false;
+                devices[i].state = 1;
+                digitalWrite(devices[i].pin, HIGH);
+                saveDevicesToEEPROM();
+                oledStatusDirty = true;
+                Serial.printf("[AUTO] device[%d] '%s' power-cycle complete — turned ON\r\n",
+                              i, devices[i].name);
+            }
+            continue;  // don't ping while cycling
+        }
+
+        // Only monitor devices that have automation enabled AND are currently ON.
+        if (!devices[i].autoEnabled || devices[i].state == 0) continue;
+
+        unsigned long intervalMs = (unsigned long)devices[i].pingInterval * 1000UL;
+        if (now - pingLastCheckedAt[i] < intervalMs) continue;
+        pingLastCheckedAt[i] = now;
+
+        bool alive = pingHost(devices[i].pingIp);
+        Serial.printf("[AUTO] device[%d] '%s' ping %s -> %s\r\n",
+                      i, devices[i].name, devices[i].pingIp, alive ? "OK" : "FAIL");
+
+        if (!alive) {
+            // Power-cycle: turn off now, turn on in 5 s.
+            devices[i].state = 0;
+            digitalWrite(devices[i].pin, LOW);
+            saveDevicesToEEPROM();
+            oledStatusDirty = true;
+            pingCyclingActive[i] = true;
+            pingCycleOffAt[i]    = now;
+            Serial.printf("[AUTO] device[%d] '%s' ping failed — starting power-cycle\r\n",
+                          i, devices[i].name);
+        }
+    }
 }
 
 bool isHighVoltageDevice(uint8_t pin) {

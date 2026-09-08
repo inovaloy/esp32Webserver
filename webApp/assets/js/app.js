@@ -110,6 +110,18 @@ class ESP32WebAPI {
     async removeDevice(index) {
         return this.post('/api/devices/remove', { index });
     }
+
+    async renameDevice(index, name) {
+        return this.post('/api/devices/rename', { index, name });
+    }
+
+    async getDeviceAutomation() {
+        return this.get('/api/devices/automation');
+    }
+
+    async saveDeviceAutomation(index, autoEnabled, pingInterval, pingIp) {
+        return this.post('/api/devices/automation/save', { index, autoEnabled, pingInterval, pingIp });
+    }
 }
 
 // Utility functions
