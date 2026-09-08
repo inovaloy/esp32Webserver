@@ -183,7 +183,10 @@
             if (!result.success) return;
             if (result.data.connected) {
                 badge.querySelector('.status-indicator').className = 'status-indicator status-connected';
-                label.textContent = result.data.ssid + ' \u00b7 ' + result.data.ip;
+                const addresses = [];
+                if (result.data.ethernet_ip) addresses.push('Ethernet: ' + result.data.ethernet_ip);
+                if (result.data.wifi_ip) addresses.push('WiFi: ' + result.data.wifi_ip);
+                label.textContent = addresses.join(' \u00b7 ');
             } else {
                 badge.querySelector('.status-indicator').className = 'status-indicator status-disconnected';
                 label.textContent = 'Not connected';

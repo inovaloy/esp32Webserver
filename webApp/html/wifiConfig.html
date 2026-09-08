@@ -39,7 +39,8 @@
         const box = document.getElementById('wifiConfigStatus');
         if (result.success && result.data.connected) {
             box.className = 'status-card-wifi status-card-connected';
-            box.innerHTML = `<strong>Connected</strong> &mdash; ${escHtmlW(result.data.ssid)} &bull; ${escHtmlW(result.data.ip)} &bull; ${result.data.rssi} dBm`;
+            const signal = result.data.network === 'WiFi' ? ` &bull; ${result.data.rssi} dBm` : '';
+            box.innerHTML = `<strong>${escHtmlW(result.data.network)} connected</strong> &mdash; ${escHtmlW(result.data.ip)}${signal}`;
         } else {
             box.className = 'status-card-wifi status-card-disconnected';
             box.innerHTML = '<strong>Not connected</strong>';

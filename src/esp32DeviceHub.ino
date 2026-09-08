@@ -1,4 +1,5 @@
 #include <WiFi.h>
+#include <ETH.h>
 #include <DNSServer.h>
 #include <EEPROM.h>
 #include "autoGen/autoGenWebServer.h"
@@ -26,8 +27,22 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #define MAX_PASS_LENGTH 64
 #define EEPROM_MAGIC_ADDR 200
 #define EEPROM_MAGIC_BYTE 0xA5
-#define FACTORY_RESET_BUTTON_PIN 23
+#define FACTORY_RESET_BUTTON_PIN 16
 #define FACTORY_RESET_HOLD_TIME 10000
+#define OLED_PAGE_BUTTON_PIN 4
+#define OLED_PAGE_BUTTON_DEBOUNCE_MS 30
+#define OLED_PAGE_BUTTON_HOLD_MS 800
+
+// W5500 uses the ESP32 VSPI pins. GPIO16 is used for the factory-reset button.
+// GPIO5 is reserved by the device configuration, so CS uses GPIO14.
+#define ETHERNET_CS_PIN 14
+#define ETHERNET_SCK_PIN 18
+#define ETHERNET_MISO_PIN 19
+#define ETHERNET_MOSI_PIN 23
+#define ETHERNET_PHY_ADDR 1
+#define ETHERNET_DHCP_TIMEOUT_MS 5000
+#define ETHERNET_LINK_TIMEOUT_MS 5000
+#define WIFI_RECONNECT_INTERVAL_MS 30000
 
 // Runtime device list (loaded from EEPROM at boot)
 Device  devices[MAX_DEVICES];
@@ -46,10 +61,22 @@ char apSsid[32];
 char apPassword[16];
 const IPAddress apIP(192, 168, 4, 1);
 const IPAddress netMsk(255, 255, 255, 0);
+const IPAddress ethernetFallbackIP(192, 168, 4, 1);
+const IPAddress ethernetFallbackGateway(0, 0, 0, 0);
+const IPAddress ethernetFallbackDns(0, 0, 0, 0);
 
 // DNS Server for captive portal
 DNSServer dnsServer;
 bool isAPMode = false;
+enum class NetworkType { None, EthernetDHCP, EthernetStatic, WiFi, AP };
+NetworkType activeNetwork = NetworkType::None;
+volatile bool ethernetLinkConnected = false;
+volatile bool ethernetGotIp = false;
+bool ethernetStarted = false;
+unsigned long ethernetLinkDownSince = 0;
+unsigned long ethernetLinkUpSince = 0;
+bool ethernetFailoverHandled = false;
+unsigned long wifiReconnectAttemptedAt = 0;
 int counter = 0;
 volatile bool rebootScheduled = false;
 unsigned long rebootAt = 0;
@@ -57,12 +84,24 @@ volatile bool eepromDirty = false;   // set by httpd task; committed + rebooted 
 volatile bool oledStatusDirty = false;
 unsigned long factoryResetButtonPressedAt = 0;
 bool factoryResetButtonHandled = false;
+bool oledPageButtonStablePressed = false;
+bool oledPageButtonLastReading = false;
+unsigned long oledPageButtonChangedAt = 0;
+unsigned long oledPageButtonPressedAt = 0;
 uint8_t oledDevicePage = 0;
 unsigned long oledDevicePageChangedAt = 0;
 
 // Function declarations
 bool eepromIsValid();
+bool startNetwork();
+bool startEthernet();
+bool configureEthernetFallback();
+void handleEthernetLinkLoss();
+void checkEthernetAvailability();
+void checkWiFiAvailability();
 bool connectToWiFi();
+void onNetworkEvent(arduino_event_id_t event, arduino_event_info_t info);
+void displayNetworkInfo();
 void displayWiFiInfo();
 void startAPMode();
 void scheduleReboot();
@@ -81,6 +120,7 @@ void saveOledSettings(uint8_t brightness, bool enabled);
 void applyOledSettings();
 void factoryResetSettings();
 void checkFactoryResetButton();
+void checkOledPageButton();
 uint8_t storageRead(int address);
 void storageWrite(int address, uint8_t value);
 void storageCommit();
@@ -136,10 +176,9 @@ void setup()
     loadControllerSettings();
 
     // Initialize pins
-    pinMode(4, OUTPUT);
+    pinMode(OLED_PAGE_BUTTON_PIN, INPUT_PULLUP);
     pinMode(33, OUTPUT);
     pinMode(FACTORY_RESET_BUTTON_PIN, INPUT_PULLUP);
-    digitalWrite(4, LOW);
     digitalWrite(33, ledStatus);
 
     // Initialize OLED display
@@ -163,20 +202,24 @@ void setup()
     // Load saved devices and restore GPIO states
     loadDevicesFromEEPROM();
 
-    // Try to connect to saved WiFi credentials
-    if (connectToWiFi()) {
-        Serial.println("Connected to WiFi successfully!");
-        displayWiFiInfo();
-    } else {
-        Serial.println("Failed to connect to WiFi. Starting AP mode...");
-        startAPMode();
-    }
+    startNetwork();
     startWebServer();
 }
 
 void loop()
 {
     checkFactoryResetButton();
+    checkOledPageButton();
+    checkEthernetAvailability();
+    checkWiFiAvailability();
+    if ((activeNetwork == NetworkType::EthernetDHCP || activeNetwork == NetworkType::EthernetStatic) && !ETH.linkUp()) {
+        if (ethernetLinkDownSince == 0) ethernetLinkDownSince = millis();
+        if (!ethernetFailoverHandled && millis() - ethernetLinkDownSince >= 1000) {
+            handleEthernetLinkLoss();
+        }
+    } else if (ETH.linkUp()) {
+        ethernetLinkDownSince = 0;
+    }
     if (isAPMode) {
         dnsServer.processNextRequest();
     }
@@ -191,7 +234,7 @@ void loop()
         updateOledDeviceStatus();
         oledStatusDirty = false;
     }
-    if (millis() - oledDevicePageChangedAt >= 4000) {
+    if (!oledPageButtonStablePressed && millis() - oledDevicePageChangedAt >= 4000) {
         oledDevicePage = (oledDevicePage + 1) % 4;
         oledDevicePageChangedAt = millis();
         updateOledDeviceStatus();
@@ -232,9 +275,233 @@ void checkFactoryResetButton() {
     }
 }
 
+void checkOledPageButton() {
+    bool readingPressed = digitalRead(OLED_PAGE_BUTTON_PIN) == LOW;
+    unsigned long now = millis();
+
+    if (readingPressed != oledPageButtonLastReading) {
+        oledPageButtonChangedAt = now;
+        oledPageButtonLastReading = readingPressed;
+    }
+
+    if (now - oledPageButtonChangedAt < OLED_PAGE_BUTTON_DEBOUNCE_MS ||
+        readingPressed == oledPageButtonStablePressed) {
+        return;
+    }
+
+    oledPageButtonStablePressed = readingPressed;
+    if (readingPressed) {
+        oledPageButtonPressedAt = now;
+        return;
+    }
+
+    // Short press advances one page. Holding the button only freezes the page.
+    if (now - oledPageButtonPressedAt < OLED_PAGE_BUTTON_HOLD_MS) {
+        oledDevicePage = (oledDevicePage + 1) % 4;
+    }
+    oledDevicePageChangedAt = now;
+    updateOledDeviceStatus();
+}
+
 // Returns true if EEPROM has been written by this firmware at least once
 bool eepromIsValid() {
     return storageRead(EEPROM_MAGIC_ADDR) == EEPROM_MAGIC_BYTE;
+}
+
+void onNetworkEvent(arduino_event_id_t event, arduino_event_info_t info) {
+    switch (event) {
+    case ARDUINO_EVENT_ETH_START:
+        Serial.println("[ETH] Started");
+        ETH.setHostname("esp32-device-hub");
+        break;
+    case ARDUINO_EVENT_ETH_CONNECTED:
+        ethernetLinkConnected = true;
+        ethernetFailoverHandled = false;
+        ethernetLinkUpSince = millis();
+        Serial.println("[ETH] Link up");
+        break;
+    case ARDUINO_EVENT_ETH_GOT_IP:
+        ethernetGotIp = true;
+        Serial.printf("[ETH] Got IP: %s\r\n", ETH.localIP().toString().c_str());
+        oledStatusDirty = true;
+        break;
+    case ARDUINO_EVENT_ETH_LOST_IP:
+        ethernetGotIp = false;
+        Serial.println("[ETH] Lost IP");
+        oledStatusDirty = true;
+        break;
+    case ARDUINO_EVENT_ETH_DISCONNECTED:
+        ethernetLinkConnected = false;
+        ethernetGotIp = false;
+        ethernetLinkUpSince = 0;
+        Serial.println("[ETH] Link down");
+        oledStatusDirty = true;
+        break;
+    case ARDUINO_EVENT_ETH_STOP:
+        ethernetLinkConnected = false;
+        ethernetGotIp = false;
+        ethernetStarted = false;
+        ethernetLinkUpSince = 0;
+        Serial.println("[ETH] Stopped");
+        break;
+    default:
+        break;
+    }
+}
+
+bool configureEthernetFallback() {
+    Serial.println("[ETH] DHCP timeout; using static Ethernet IP 192.168.4.1");
+    if (!ETH.config(ethernetFallbackIP, ethernetFallbackGateway, netMsk,
+                    ethernetFallbackDns, ethernetFallbackDns)) {
+        Serial.println("[ETH] Failed to configure static fallback");
+        return false;
+    }
+    activeNetwork = NetworkType::EthernetStatic;
+    return true;
+}
+
+bool startEthernet() {
+    Serial.println("[ETH] Initializing W5500...");
+    ethernetLinkConnected = false;
+    ethernetGotIp = false;
+    Network.onEvent(onNetworkEvent);
+
+    if (!ETH.begin(ETH_PHY_W5500, ETHERNET_PHY_ADDR, ETHERNET_CS_PIN, -1, -1,
+                   SPI2_HOST, ETHERNET_SCK_PIN, ETHERNET_MISO_PIN, ETHERNET_MOSI_PIN)) {
+        Serial.println("[ETH] W5500 initialization failed");
+        return false;
+    }
+    ethernetStarted = true;
+
+    unsigned long linkStart = millis();
+    while (!ethernetLinkConnected && !ETH.linkUp() && millis() - linkStart < ETHERNET_LINK_TIMEOUT_MS) {
+        delay(25);
+    }
+    if (!ethernetLinkConnected && ETH.linkUp()) {
+        ethernetLinkConnected = true;
+        Serial.println("[ETH] Link detected by polling");
+    }
+    if (!ethernetLinkConnected) {
+        Serial.println("[ETH] No Ethernet link");
+        return false;
+    }
+
+    Serial.println("[ETH] Waiting for DHCP...");
+    unsigned long dhcpStart = millis();
+    while (!ethernetGotIp && millis() - dhcpStart < ETHERNET_DHCP_TIMEOUT_MS) {
+        delay(25);
+    }
+    if (ethernetGotIp) {
+        activeNetwork = NetworkType::EthernetDHCP;
+        return true;
+    }
+
+    return configureEthernetFallback();
+}
+
+void checkEthernetAvailability() {
+    if (!ethernetStarted) return;
+
+    if (!ethernetLinkConnected && ETH.linkUp()) {
+        ethernetLinkConnected = true;
+        ethernetLinkUpSince = millis();
+        Serial.println("[ETH] Link detected while WiFi is active");
+    }
+    if (!ethernetLinkConnected) return;
+
+    if (ethernetGotIp && (activeNetwork == NetworkType::WiFi || activeNetwork == NetworkType::AP)) {
+        if (isAPMode) {
+            dnsServer.stop();
+            WiFi.softAPdisconnect(true);
+            isAPMode = false;
+        }
+        activeNetwork = NetworkType::EthernetDHCP;
+        ethernetFailoverHandled = false;
+        Serial.printf("[NET] Ethernet is now preferred at %s; WiFi remains connected\r\n",
+                      ETH.localIP().toString().c_str());
+        displayNetworkInfo();
+        return;
+    }
+
+    if ((activeNetwork == NetworkType::WiFi || activeNetwork == NetworkType::AP) && !ethernetGotIp && ethernetLinkUpSince != 0 &&
+        millis() - ethernetLinkUpSince >= ETHERNET_DHCP_TIMEOUT_MS) {
+        if (isAPMode) {
+            dnsServer.stop();
+            WiFi.softAPdisconnect(true);
+            isAPMode = false;
+        }
+        if (configureEthernetFallback()) {
+            Serial.println("[NET] Ethernet static fallback is now preferred; WiFi remains connected");
+            displayNetworkInfo();
+        }
+    }
+}
+
+bool startNetwork() {
+    isAPMode = false;
+    ethernetFailoverHandled = false;
+    ethernetLinkDownSince = 0;
+    ethernetLinkUpSince = 0;
+    Serial.println("[NET] Trying saved WiFi credentials...");
+    bool ethernetAvailable = startEthernet();
+    bool wifiAvailable = connectToWiFi();
+    if (ethernetAvailable) {
+        activeNetwork = ethernetGotIp ? NetworkType::EthernetDHCP : NetworkType::EthernetStatic;
+        Serial.println(wifiAvailable ? "[NET] Ethernet and WiFi are connected" : "[NET] Ethernet connected; WiFi unavailable");
+        displayNetworkInfo();
+        return true;
+    }
+    if (wifiAvailable) {
+        activeNetwork = NetworkType::WiFi;
+        Serial.println("[NET] WiFi connected");
+        displayNetworkInfo();
+        return true;
+    }
+
+    Serial.println("[NET] WiFi connection failed; starting AP mode");
+    startAPMode();
+    displayNetworkInfo();
+    return true;
+}
+
+void handleEthernetLinkLoss() {
+    ethernetFailoverHandled = true;
+    ethernetLinkDownSince = 0;
+    Serial.println("[NET] Ethernet cable disconnected; switching to saved WiFi");
+    ethernetLinkConnected = false;
+    ethernetGotIp = false;
+    if (WiFi.status() == WL_CONNECTED) {
+        activeNetwork = NetworkType::WiFi;
+        Serial.println("[NET] WiFi remains connected after Ethernet link loss");
+        displayNetworkInfo();
+        return;
+    }
+
+    if (connectToWiFi()) {
+        activeNetwork = NetworkType::WiFi;
+        Serial.println("[NET] WiFi connected after Ethernet link loss");
+        displayNetworkInfo();
+        return;
+    }
+
+    Serial.println("[NET] WiFi unavailable after Ethernet link loss; starting AP mode");
+    startAPMode();
+    displayNetworkInfo();
+}
+
+void checkWiFiAvailability() {
+    if (isAPMode || WiFi.status() == WL_CONNECTED) return;
+    if (millis() - wifiReconnectAttemptedAt < WIFI_RECONNECT_INTERVAL_MS) return;
+
+    wifiReconnectAttemptedAt = millis();
+    Serial.println("[NET] WiFi is unavailable; trying saved credentials");
+    if (connectToWiFi()) {
+        Serial.println("[NET] WiFi connected while Ethernet remains active");
+        if (!ethernetGotIp) {
+            activeNetwork = NetworkType::WiFi;
+            displayNetworkInfo();
+        }
+    }
 }
 
 uint8_t storageRead(int address) {
@@ -343,28 +610,47 @@ bool connectToWiFi() {
     }
 }
 
-// Function to display WiFi connection info
-void displayWiFiInfo() {
-    Serial.println("");
-    Serial.println("WiFi connected");
-    Serial.print("Use 'http://");
-    Serial.print(WiFi.localIP());
-    Serial.println("' to connect");
+void displayNetworkInfo() {
+    String networkName;
+    IPAddress networkIP;
+    if (activeNetwork == NetworkType::EthernetDHCP) {
+        networkName = "Ethernet";
+        networkIP = ETH.localIP();
+    } else if (activeNetwork == NetworkType::EthernetStatic) {
+        networkName = "Ethernet Direct";
+        networkIP = ethernetFallbackIP;
+    } else if (activeNetwork == NetworkType::WiFi) {
+        networkName = "WiFi";
+        networkIP = WiFi.localIP();
+    } else {
+        networkName = "AP Mode";
+        networkIP = apIP;
+    }
 
+    Serial.printf("[NET] %s active at http://%s\r\n", networkName.c_str(), networkIP.toString().c_str());
     display.clearDisplay();
     display.setTextSize(1);
     display.setCursor(0, 0);
-    display.println("WiFi Connected!");
-    display.printf("IP: %s\n", WiFi.localIP().toString().c_str());
-    display.printf("SSID: %s\n", WiFi.SSID().c_str());
+    display.println(networkName);
+    display.printf("IP: %s\n", networkIP.toString().c_str());
+    if (activeNetwork == NetworkType::WiFi)
+        display.printf("SSID: %s\n", WiFi.SSID().c_str());
+    else if (activeNetwork == NetworkType::AP)
+        display.printf("SSID: %s\n", apSsid);
     display.display();
     delay(2000);
     updateOledDeviceStatus();
 }
 
+void displayWiFiInfo() {
+    activeNetwork = NetworkType::WiFi;
+    displayNetworkInfo();
+}
+
 // Function to start AP mode with captive portal
 void startAPMode() {
     isAPMode = true;
+    activeNetwork = NetworkType::AP;
 
     display.clearDisplay();
     display.setTextSize(1);
@@ -450,18 +736,21 @@ void updateOledDeviceStatus() {
         display.setCursor(0, 0);
         display.println(controllerName);
         display.setCursor(0, 14);
+        if (ETH.hasIP()) {
+            display.print("ETH: ");
+            display.println(ETH.localIP());
+        } else {
+            display.println("ETH: unavailable");
+        }
+        display.setCursor(0, 28);
         if (WiFi.status() == WL_CONNECTED) {
             display.print("WiFi: ");
-            display.print(WiFi.SSID().substring(0, 20));
-            display.setCursor(0, 28);
-            display.print("IP: ");
             display.println(WiFi.localIP());
-        } else {
+        } else if (isAPMode) {
             display.print("AP: ");
-            display.print(String(apSsid).substring(0, 20));
-            display.setCursor(0, 28);
-            display.print("IP: ");
             display.println(apIP);
+        } else {
+            display.println("WiFi: unavailable");
         }
         display.setCursor(0, 42);
         display.println("Firmware: 1.0.1");
