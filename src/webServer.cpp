@@ -9,6 +9,7 @@
 #include <WiFi.h>
 #include <ETH.h>
 #include <EEPROM.h>
+#include <Update.h>
 #include <string.h>
 
 // Device state and admin auth owned by the .ino
@@ -229,6 +230,54 @@ char* apiSettingsHandlerHook(httpd_req_t *req) {
     return out;
 }
 
+// POST /api/firmware/update with the raw firmware binary as the request body.
+char* apiFirmwareUpdateHandlerHook(httpd_req_t *req) {
+    if (!isAuthorised(req)) { sendUnauthorised(req); return nullptr; }
+
+    cJSON *response = cJSON_CreateObject();
+    if (req->content_len == 0) {
+        cJSON_AddBoolToObject(response, "success", false);
+        cJSON_AddStringToObject(response, "message", "Firmware file is empty");
+    } else if (!Update.begin(req->content_len)) {
+        cJSON_AddBoolToObject(response, "success", false);
+        cJSON_AddStringToObject(response, "message", "Not enough space for firmware update");
+    } else {
+        uint8_t buffer[2048];
+        size_t remaining = req->content_len;
+        bool writeOk = true;
+        bool imageHeaderOk = true;
+        bool firstChunk = true;
+
+        while (remaining > 0) {
+            size_t requested = remaining > sizeof(buffer) ? sizeof(buffer) : remaining;
+            int received = httpd_req_recv(req, (char *)buffer, requested);
+            if (received <= 0 || Update.write(buffer, (size_t)received) != (size_t)received) {
+                writeOk = false;
+                break;
+            }
+            if (firstChunk) {
+                imageHeaderOk = buffer[0] == 0xE9;
+                firstChunk = false;
+            }
+            remaining -= (size_t)received;
+        }
+
+        if (writeOk && imageHeaderOk && remaining == 0 && Update.end() && Update.isFinished()) {
+            cJSON_AddBoolToObject(response, "success", true);
+            cJSON_AddStringToObject(response, "message", "Firmware uploaded. Rebooting...");
+            scheduleReboot();
+        } else {
+            Update.abort();
+            cJSON_AddBoolToObject(response, "success", false);
+            cJSON_AddStringToObject(response, "message", "Firmware update failed");
+        }
+    }
+
+    char *out = cJSON_Print(response);
+    cJSON_Delete(response);
+    return out;
+}
+
 // POST /api/settings/save { "controllerName": "Home Controller", "logoutMinutes": 15, "oledBrightness": 100, "oledEnabled": true }
 char* apiSettingsSaveHandlerHook(httpd_req_t *req) {
     if (!isAuthorised(req)) { sendUnauthorised(req); return nullptr; }
@@ -397,9 +446,15 @@ char* apiWifiStatusHandlerHook(httpd_req_t *req) {
         cJSON_AddStringToObject(response, "network", "Ethernet");
         cJSON_AddStringToObject(response, "ssid", "Ethernet");
         cJSON_AddStringToObject(response, "ip", ETH.localIP().toString().c_str());
+        cJSON_AddStringToObject(response, "mac", ETH.macAddress().c_str());
+        cJSON_AddStringToObject(response, "gateway", ETH.gatewayIP().toString().c_str());
+        cJSON_AddStringToObject(response, "subnet", ETH.subnetMask().toString().c_str());
     } else if (wifiConnected) {
         cJSON_AddStringToObject(response, "network", "WiFi");
         cJSON_AddStringToObject(response, "ip", WiFi.localIP().toString().c_str());
+        cJSON_AddStringToObject(response, "mac", WiFi.macAddress().c_str());
+        cJSON_AddStringToObject(response, "gateway", WiFi.gatewayIP().toString().c_str());
+        cJSON_AddStringToObject(response, "subnet", WiFi.subnetMask().toString().c_str());
     } else {
         cJSON_AddStringToObject(response, "network", "None");
         cJSON_AddStringToObject(response, "status", "Disconnected");

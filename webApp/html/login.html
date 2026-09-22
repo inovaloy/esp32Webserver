@@ -6,20 +6,27 @@
     <title>Home Controller — Login</title>
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-    <link rel="stylesheet" href="/css/style.css?v=16">
+    <link rel="stylesheet" href="/css/style.css?v=48">
     <script>
         (function(){
             var t = localStorage.getItem('theme');
             var dark = t === 'dark' || (!t && matchMedia('(prefers-color-scheme:dark)').matches);
             document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+            var p = localStorage.getItem('palette');
+            document.documentElement.setAttribute('data-palette', p === 'blue' || p === 'amber' || p === 'rose' ? p : 'green');
         })();
     </script>
 </head>
-<body>
+<body class="login-page">
     <div style="position:fixed;top:12px;right:14px;">
-        <button class="btn-icon" id="themeToggle" title="Toggle dark/light mode">&#9790;</button>
+        <button class="btn-icon" id="themeToggle" title="Toggle dark/light mode" aria-label="Toggle dark/light mode">
+            <span class="theme-icon theme-icon-sun" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path></svg></span>
+            <span class="theme-icon theme-icon-moon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5 8.5 8.5 0 1 0 20.5 14.5Z"></path></svg></span>
+            <span class="sr-only">Theme</span>
+        </button>
     </div>
     <div class="container login-container">
+        <div class="login-brand" aria-hidden="true"><img src="/favicon.png" alt=""></div>
         <h1>Home Controller</h1>
         <p class="login-subtitle">Enter the admin password to continue</p>
         <div id="alertContainer"></div>
@@ -29,7 +36,7 @@
                 <div class="input-with-toggle">
                     <input type="password" id="password" class="form-control"
                            placeholder="Enter password" autocomplete="current-password" required>
-                    <button type="button" id="togglePw" class="btn-pw-toggle" title="Show/hide password">&#128065;</button>
+                    <button type="button" id="togglePw" class="btn-pw-toggle" title="Show/hide password" aria-label="Show password"><span class="password-icon" aria-hidden="true"></span></button>
                 </div>
             </div>
             <button type="submit" class="btn btn-login" id="loginBtn">Sign In</button>
@@ -51,7 +58,6 @@
             const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
             localStorage.setItem('theme', isDark ? 'light' : 'dark');
             document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
-            this.textContent = isDark ? '\u263D' : '\u2600';
         });
 
         // If already authenticated, go straight to dashboard
@@ -64,7 +70,8 @@
             const inp = document.getElementById('password');
             const isHidden = inp.type === 'password';
             inp.type = isHidden ? 'text' : 'password';
-            this.textContent = isHidden ? '\uD83D\uDE48' : '\uD83D\uDC41';
+            this.classList.toggle('is-visible', isHidden);
+            this.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
         });
 
         document.getElementById('loginForm').addEventListener('submit', async function(e) {

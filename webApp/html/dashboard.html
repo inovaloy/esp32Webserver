@@ -256,10 +256,10 @@
                         </label>
                         <div class="card-menu-wrap">
                             <button class="btn-dots" title="More options"
-                                    onclick="toggleCardMenu(event, ${d.index})">&#8942;</button>
+                                    onclick="toggleCardMenu(event, ${d.index})"><span class="more-icon" aria-hidden="true"><i></i><i></i><i></i></span></button>
                             <div class="card-menu" id="menu-${d.index}">
                                 <button class="card-menu-item" onclick="openRenameModal(${d.index})">
-                                    ✏ Rename
+                                    <span class="menu-action-icon edit-icon" aria-hidden="true"></span>Rename
                                 </button>
                                 <button class="card-menu-item" onclick="openWatchdogModal(${d.index})">
                                     ⚡ Ping Watchdog

@@ -254,6 +254,7 @@ void startWebServer(){
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
 
     // Increase limits for larger responses and more handlers
+    config.max_req_hdr_len  = 4096;              // Mobile browser headers can exceed the 1KB SDK default
     config.max_resp_headers = 16;
     config.stack_size       = 12288;           // Increased stack size for asset handling
     config.task_priority    = 5;

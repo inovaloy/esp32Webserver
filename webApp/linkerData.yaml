@@ -127,6 +127,10 @@ contentTypes: &contentTypes
     rtnType : *rtnJSON
     reqType : *httpPOST
 
+"/api/firmware/update" :
+    rtnType : *rtnJSON
+    reqType : *httpPOST
+
 "/api/wifi/scan" :
     rtnType: *rtnJSON
     reqType: *httpGET
