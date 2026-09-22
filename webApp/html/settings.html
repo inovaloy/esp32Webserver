@@ -3,35 +3,168 @@
         <h2>Settings</h2>
         <p>Customize your controller.</p>
     </div>
-    <div class="settings-panel">
-        <div class="form-group">
-            <label for="controllerName">Controller Name</label>
-            <input type="text" id="controllerName" class="form-control" maxlength="20" placeholder="Home Controller">
+    <div class="settings-layout">
+        <label class="settings-mobile-select-label" for="settingsMobileSelect">Settings section</label>
+        <select class="settings-mobile-select" id="settingsMobileSelect" aria-label="Settings section">
+            <option value="general">General</option>
+            <option value="display">Display</option>
+            <option value="appearance">Appearance</option>
+            <option value="security">Security</option>
+            <option value="network">Network</option>
+            <option value="backup">Backup &amp; Restore</option>
+            <option value="firmware">Firmware</option>
+            <option value="system">System</option>
+        </select>
+        <nav class="settings-categories" aria-label="Settings categories">
+            <button class="settings-category is-active" type="button" data-settings-target="general"><span class="settings-category-icon icon-general" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"></circle><path d="M12 8v8M8 12h8"></path></svg></span>General</button>
+            <button class="settings-category" type="button" data-settings-target="display"><span class="settings-category-icon icon-display" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"></rect><path d="M8 16h8"></path></svg></span>Display</button>
+            <button class="settings-category" type="button" data-settings-target="appearance"><span class="settings-category-icon icon-appearance" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg></span>Appearance</button>
+            <button class="settings-category" type="button" data-settings-target="security"><span class="settings-category-icon icon-security" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="6" y="10" width="12" height="10" rx="2"></rect><path d="M8 10V8a4 4 0 0 1 8 0v2M12 14v3"></path></svg></span>Security</button>
+            <button class="settings-category" type="button" data-settings-target="network"><span class="settings-category-icon icon-network" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 9a12 12 0 0 1 16 0M7 12a7.5 7.5 0 0 1 10 0M10 15a3.2 3.2 0 0 1 4 0"></path><circle cx="12" cy="18" r="1"></circle></svg></span>Network</button>
+            <button class="settings-category" type="button" data-settings-target="backup"><span class="settings-category-icon icon-backup" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v12M8 11l4 4 4-4M5 19h14"></path></svg></span>Backup &amp; Restore</button>
+            <button class="settings-category" type="button" data-settings-target="firmware"><span class="settings-category-icon icon-firmware" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4v11M8 11l4 4 4-4M5 20h14"></path></svg></span>Firmware</button>
+            <button class="settings-category" type="button" data-settings-target="system"><span class="settings-category-icon icon-system" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="m19 13 1-1-1-1-.4-1.2.3-1.4-1.4-.8-1.1.5-1.1-.6-.6-1.1h-1.6l-.6 1.1-1.1.6-1.1-.5-1.4.8.3 1.4L5 11l-1 1 1 1 .4 1.2-.3 1.4 1.4.8 1.1-.5 1.1.6.6 1.1h1.6l.6-1.1 1.1-.6 1.1.5 1.4-.8-.3-1.4Z"></path></svg></span>System</button>
+        </nav>
+
+        <div class="settings-content">
+            <section class="settings-panel settings-section is-active" data-settings-section="general">
+                <h3>General</h3>
+                <p class="settings-section-description">Name this controller so it is easy to identify.</p>
+                <div class="form-group">
+                    <label for="controllerName">Controller Name</label>
+                    <input type="text" id="controllerName" class="form-control" maxlength="20" placeholder="Home Controller">
+                </div>
+                <button class="btn btn-primary" id="saveSettingsBtn">Save Settings</button>
+            </section>
+
+            <section class="settings-panel settings-section" data-settings-section="display" hidden>
+                <h3>Display</h3>
+                <p class="settings-section-description">Adjust the OLED display behavior.</p>
+                <div class="form-group">
+                    <label for="oledBrightness">OLED Brightness</label>
+                    <input type="range" id="oledBrightness" class="form-control" min="1" max="255" step="1">
+                </div>
+                <label class="settings-toggle"><input type="checkbox" id="oledEnabled"> Enable OLED display</label>
+                <button class="btn btn-primary" id="saveDisplayBtn" type="button">Save Display Settings</button>
+            </section>
+
+            <section class="settings-panel settings-section" data-settings-section="appearance" hidden>
+                <h3>Appearance</h3>
+                <p class="settings-section-description">Choose how the web interface looks.</p>
+                <div class="form-group">
+                    <label for="themePreference">Theme</label>
+                    <select id="themePreference" class="form-control">
+                        <option value="system">System</option>
+                        <option value="light">Light</option>
+                        <option value="dark">Dark</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <span class="form-label">Accent color</span>
+                    <div class="palette-picker" id="palettePreference" role="group" aria-label="Accent color">
+                        <button type="button" class="palette-swatch palette-swatch-green" data-palette-value="green" aria-label="Green" title="Green"></button>
+                        <button type="button" class="palette-swatch palette-swatch-blue" data-palette-value="blue" aria-label="Ocean Blue" title="Ocean Blue"></button>
+                        <button type="button" class="palette-swatch palette-swatch-amber" data-palette-value="amber" aria-label="Amber" title="Amber"></button>
+                        <button type="button" class="palette-swatch palette-swatch-rose" data-palette-value="rose" aria-label="Rose" title="Rose"></button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="settings-panel settings-section" data-settings-section="security" hidden>
+                <h3>Security</h3>
+                <p class="settings-section-description">Control access to the controller interface.</p>
+                <div class="form-group">
+                    <label for="logoutMinutes">Auto Logout (minutes)</label>
+                    <input type="number" id="logoutMinutes" class="form-control" min="1" max="1440" step="1">
+                </div>
+                <button class="settings-action" id="changePasswordBtn">Change Admin Password <span class="settings-action-detail">Update the administrator password</span></button>
+                <button class="btn btn-primary settings-section-button" id="saveSecurityBtn" type="button">Save Security Settings</button>
+            </section>
+
+            <section class="settings-panel settings-section" data-settings-section="network" hidden>
+                <h3>Network</h3>
+                <p class="settings-section-description">Connect the controller to a Wi-Fi network.</p>
+                <div id="settingsWifiStatus" class="status-card-wifi">Checking network status...</div>
+                <div class="wifi-scan-row settings-wifi-scan-row">
+                    <button class="btn btn-primary" id="settingsScanBtn" type="button">Scan for Networks</button>
+                </div>
+                <div id="settingsNetworkList"></div>
+                <form id="settingsWifiForm" class="wifi-form">
+                    <div class="form-group">
+                        <label for="settingsWifiSsid">Network (SSID)</label>
+                        <input type="text" id="settingsWifiSsid" class="form-control" placeholder="Wi-Fi network name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="settingsWifiPass">Password</label>
+                        <div class="input-with-toggle">
+                            <input type="password" id="settingsWifiPass" class="form-control" placeholder="Leave empty for open networks">
+                            <button type="button" class="btn-pw-toggle" id="settingsWifiPassToggle" title="Show/hide password" aria-label="Show password"><span class="password-icon" aria-hidden="true"></span></button>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="settingsConnectBtn">Connect</button>
+                </form>
+                <div id="settingsWifiMessage"></div>
+            </section>
+
+            <section class="settings-panel settings-section" data-settings-section="backup" hidden>
+                <h3>Backup &amp; Restore</h3>
+                <p class="settings-section-description">Save or restore controller configuration.</p>
+                <button class="settings-action" id="backupSettingsBtn">Backup Configuration</button>
+                <label class="settings-action" for="restoreSettingsFile">Restore Configuration</label>
+                <input type="file" id="restoreSettingsFile" accept="application/json,.json" hidden>
+            </section>
+
+            <section class="settings-panel settings-section" data-settings-section="firmware" hidden>
+                <h3>Firmware Update</h3>
+                <p class="settings-section-description">Install a new ESP32 firmware image.</p>
+                <input type="file" id="firmwareFile" accept=".bin,application/octet-stream" hidden>
+                <div class="firmware-dropzone" id="firmwareDropzone" role="button" tabindex="0">
+                    <strong>Drop firmware .bin here</strong>
+                    <span>or</span>
+                    <button type="button" class="btn btn-primary" id="firmwareBrowseBtn">Browse</button>
+                </div>
+                <div class="firmware-file" id="firmwareFileName"></div>
+                <div class="firmware-progress" id="firmwareProgress" hidden>
+                    <div class="firmware-progress-track"><div id="firmwareProgressBar"></div></div>
+                    <span id="firmwareProgressText">0%</span>
+                </div>
+                <div id="firmwareMessage"></div>
+                <div class="firmware-reboot-countdown" id="firmwareRebootCountdown" hidden></div>
+            </section>
+
+            <section class="settings-panel settings-section" data-settings-section="system" hidden>
+                <h3>System</h3>
+                <p class="settings-section-description">Device maintenance and recovery.</p>
+                <button class="settings-action settings-danger" id="factoryResetBtn">Factory Reset</button>
+                <div class="settings-version">Firmware <span id="firmwareVersion">Unknown</span></div>
+            </section>
         </div>
-        <div class="form-group">
-            <label for="logoutMinutes">Auto Logout (minutes)</label>
-            <input type="number" id="logoutMinutes" class="form-control" min="1" max="1440" step="1">
-        </div>
-        <div class="form-group">
-            <label for="oledBrightness">OLED Brightness</label>
-            <input type="range" id="oledBrightness" class="form-control" min="1" max="255" step="1">
-        </div>
-        <label class="settings-toggle"><input type="checkbox" id="oledEnabled"> Enable OLED display</label>
-        <button class="btn btn-primary" id="saveSettingsBtn">Save Settings</button>
-    </div>
-    <div class="settings-panel settings-tools">
-        <h3>System Settings</h3>
-        <a class="settings-action" href="#wifi">&#9881; WiFi Settings</a>
-        <button class="settings-action" id="changePasswordBtn">&#128274; Change Admin Password</button>
-        <button class="settings-action" id="backupSettingsBtn">&#8681; Backup Configuration</button>
-        <label class="settings-action" for="restoreSettingsFile">&#8679; Restore Configuration</label>
-        <input type="file" id="restoreSettingsFile" accept="application/json,.json" hidden>
-        <button class="settings-action settings-danger" id="factoryResetBtn">&#9888; Factory Reset</button>
-        <div class="settings-version">Firmware <span id="firmwareVersion">Unknown</span></div>
     </div>
 </div>
 
 <script>
+    const settingsMobileSelect = document.getElementById('settingsMobileSelect');
+
+    function activateSettingsSection(target) {
+        if (target !== 'network') clearSettingsWifiSearch();
+        document.querySelectorAll('.settings-category').forEach(item => {
+            item.classList.toggle('is-active', item.dataset.settingsTarget === target);
+        });
+        document.querySelectorAll('.settings-section').forEach(section => {
+            const active = section.dataset.settingsSection === target;
+            section.hidden = !active;
+            section.classList.toggle('is-active', active);
+        });
+        settingsMobileSelect.value = target;
+    }
+
+    document.querySelectorAll('.settings-category').forEach(category => {
+        category.addEventListener('click', () => {
+            activateSettingsSection(category.dataset.settingsTarget);
+        });
+    });
+    settingsMobileSelect.addEventListener('change', () => activateSettingsSection(settingsMobileSelect.value));
+
     (async function loadSettings() {
         const result = await api.getSettings();
         if (!result.success || !result.data.success) return;
@@ -67,6 +200,131 @@
         }
     });
 
+    document.getElementById('saveDisplayBtn').addEventListener('click', () => document.getElementById('saveSettingsBtn').click());
+    document.getElementById('saveSecurityBtn').addEventListener('click', () => document.getElementById('saveSettingsBtn').click());
+
+    const themePreference = document.getElementById('themePreference');
+    const savedTheme = localStorage.getItem('theme');
+    themePreference.value = savedTheme === 'light' || savedTheme === 'dark' ? savedTheme : 'system';
+    themePreference.addEventListener('change', function () {
+        if (this.value === 'system') {
+            localStorage.removeItem('theme');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+        } else {
+            localStorage.setItem('theme', this.value);
+            document.documentElement.setAttribute('data-theme', this.value);
+        }
+    });
+
+    const palettePreference = document.getElementById('palettePreference');
+    const savedPalette = localStorage.getItem('palette');
+    const palettes = ['green', 'blue', 'amber', 'rose'];
+    const activePalette = palettes.includes(savedPalette) ? savedPalette : 'green';
+    document.documentElement.setAttribute('data-palette', activePalette);
+    palettePreference.querySelectorAll('[data-palette-value]').forEach(swatch => {
+        const selected = swatch.dataset.paletteValue === activePalette;
+        swatch.classList.toggle('is-selected', selected);
+        swatch.setAttribute('aria-pressed', selected ? 'true' : 'false');
+        swatch.addEventListener('click', () => {
+            const palette = swatch.dataset.paletteValue;
+            localStorage.setItem('palette', palette);
+            document.documentElement.setAttribute('data-palette', palette);
+            palettePreference.querySelectorAll('[data-palette-value]').forEach(item => {
+                const isSelected = item === swatch;
+                item.classList.toggle('is-selected', isSelected);
+                item.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+            });
+        });
+    });
+
+    const settingsWifiStatus = document.getElementById('settingsWifiStatus');
+    const settingsNetworkList = document.getElementById('settingsNetworkList');
+    const settingsWifiForm = document.getElementById('settingsWifiForm');
+    const settingsWifiSsid = document.getElementById('settingsWifiSsid');
+    const settingsWifiPass = document.getElementById('settingsWifiPass');
+    const settingsWifiMessage = document.getElementById('settingsWifiMessage');
+    let settingsWifiScanId = 0;
+
+    function clearSettingsWifiSearch() {
+        settingsWifiScanId++;
+        settingsNetworkList.replaceChildren();
+    }
+
+    async function loadSettingsWifiStatus() {
+        const result = await api.getWiFiStatus();
+        if (result.success && result.data.connected) {
+            settingsWifiStatus.className = 'status-card-wifi status-card-connected';
+            const signal = result.data.network === 'WiFi' && result.data.rssi !== undefined
+                ? '<div class="settings-network-detail"><span>Signal</span><strong>' + escSettings(result.data.rssi) + ' dBm</strong></div>'
+                : '';
+            settingsWifiStatus.innerHTML = '<div class="settings-network-summary"><strong>' + escSettings(result.data.network) + ' connected</strong><span>Active connection</span></div>' +
+                '<div class="settings-network-details">' +
+                '<div class="settings-network-detail"><span>SSID</span><strong>' + escSettings(result.data.ssid || result.data.network) + '</strong></div>' +
+                '<div class="settings-network-detail"><span>IP address</span><strong>' + escSettings(result.data.ip) + '</strong></div>' +
+                '<div class="settings-network-detail"><span>MAC address</span><strong>' + escSettings(result.data.mac || 'Unavailable') + '</strong></div>' +
+                '<div class="settings-network-detail"><span>Gateway</span><strong>' + escSettings(result.data.gateway || 'Unavailable') + '</strong></div>' +
+                '<div class="settings-network-detail"><span>Subnet</span><strong>' + escSettings(result.data.subnet || 'Unavailable') + '</strong></div>' +
+                signal + '</div>';
+        } else {
+            settingsWifiStatus.className = 'status-card-wifi status-card-disconnected';
+            settingsWifiStatus.innerHTML = '<strong>Not connected</strong><span>Connect through Wi-Fi or Ethernet to see network details.</span>';
+        }
+    }
+
+    document.getElementById('settingsScanBtn').addEventListener('click', async function () {
+        const scanId = ++settingsWifiScanId;
+        settingsNetworkList.innerHTML = '<div class="loading"><div class="loading-spinner"></div><div>Scanning...</div></div>';
+        const result = await api.scanWiFiNetworks();
+        if (scanId !== settingsWifiScanId) return;
+        if (!result.success || !result.data.networks.length) {
+            settingsNetworkList.innerHTML = '<div class="alert alert-info">No networks found.</div>';
+            return;
+        }
+        settingsNetworkList.innerHTML = result.data.networks.map(network => {
+            const signal = network.rssi > -50 ? 'excellent' : network.rssi > -65 ? 'good' : network.rssi > -75 ? 'fair' : 'poor';
+            const security = network.encrypted ? 'Secured' : 'Open';
+            const ssid = escSettings(network.ssid);
+            return '<button type="button" class="wifi-item" data-settings-ssid="' + ssid + '">' +
+                '<span>' + ssid + ' <small class="wifi-security">' + security + '</small></span>' +
+                '<span class="wifi-signal ' + signal + '">' + network.rssi + ' dBm</span></button>';
+        }).join('');
+        settingsNetworkList.querySelectorAll('[data-settings-ssid]').forEach(item => {
+            item.addEventListener('click', () => {
+                settingsWifiSsid.value = item.dataset.settingsSsid;
+                settingsNetworkList.querySelectorAll('.wifi-item').forEach(row => row.classList.toggle('selected', row === item));
+            });
+        });
+    });
+
+    document.getElementById('settingsWifiPassToggle').addEventListener('click', function () {
+        const hidden = settingsWifiPass.type === 'password';
+        settingsWifiPass.type = hidden ? 'text' : 'password';
+        this.classList.toggle('is-visible', hidden);
+        this.setAttribute('aria-label', hidden ? 'Hide password' : 'Show password');
+    });
+
+    settingsWifiForm.addEventListener('submit', async function (event) {
+        event.preventDefault();
+        const ssid = settingsWifiSsid.value.trim();
+        if (!ssid) return;
+        const button = document.getElementById('settingsConnectBtn');
+        button.disabled = true;
+        button.textContent = 'Connecting...';
+        const result = await api.connectToWiFi(ssid, settingsWifiPass.value);
+        button.disabled = false;
+        button.textContent = 'Connect';
+        settingsWifiMessage.className = 'alert alert-' + (result.success && result.data.success ? 'success' : 'danger');
+        settingsWifiMessage.textContent = result.success && result.data.success ? 'Connected to ' + ssid + '!' : ((result.data && result.data.message) || 'Failed to connect');
+        settingsWifiMessage.style.display = 'block';
+        if (result.success && result.data.success) setTimeout(loadSettingsWifiStatus, 2000);
+    });
+
+    function escSettings(value) {
+        return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    loadSettingsWifiStatus();
+
     document.getElementById('changePasswordBtn').addEventListener('click', function () {
         document.getElementById('changePwModal').style.display = 'flex';
     });
@@ -96,6 +354,105 @@
         };
         reader.readAsText(file);
     });
+
+    const firmwareFileInput = document.getElementById('firmwareFile');
+    const firmwareDropzone = document.getElementById('firmwareDropzone');
+    const firmwareBrowseBtn = document.getElementById('firmwareBrowseBtn');
+    const firmwareFileName = document.getElementById('firmwareFileName');
+    const firmwareProgress = document.getElementById('firmwareProgress');
+    const firmwareProgressBar = document.getElementById('firmwareProgressBar');
+    const firmwareProgressText = document.getElementById('firmwareProgressText');
+    const firmwareMessage = document.getElementById('firmwareMessage');
+    const firmwareRebootCountdown = document.getElementById('firmwareRebootCountdown');
+    let firmwareRebootTimer;
+
+    firmwareBrowseBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        firmwareFileInput.click();
+    });
+    firmwareDropzone.addEventListener('click', () => firmwareFileInput.click());
+    firmwareDropzone.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') firmwareFileInput.click();
+    });
+    ['dragenter', 'dragover'].forEach(type => firmwareDropzone.addEventListener(type, (event) => {
+        event.preventDefault();
+        firmwareDropzone.classList.add('is-dragging');
+    }));
+    ['dragleave', 'drop'].forEach(type => firmwareDropzone.addEventListener(type, (event) => {
+        event.preventDefault();
+        firmwareDropzone.classList.remove('is-dragging');
+    }));
+    firmwareDropzone.addEventListener('drop', (event) => handleFirmwareFile(event.dataTransfer.files[0]));
+    firmwareFileInput.addEventListener('change', () => handleFirmwareFile(firmwareFileInput.files[0]));
+
+    function handleFirmwareFile(file) {
+        if (!file) return;
+        if (!file.name.toLowerCase().endsWith('.bin')) {
+            showFirmwareMessage('Choose an ESP32 .bin firmware file', 'danger');
+            return;
+        }
+        firmwareFileName.textContent = file.name + ' (' + Utils.formatBytes(file.size) + ')';
+        uploadFirmware(file);
+    }
+
+    function uploadFirmware(file) {
+        firmwareProgress.hidden = false;
+        firmwareRebootCountdown.hidden = true;
+        firmwareProgressBar.style.width = '0%';
+        firmwareProgressText.textContent = '0%';
+        showFirmwareMessage('Uploading firmware...', 'info');
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/firmware/update');
+        xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+        xhr.setRequestHeader('X-Auth-Token', localStorage.getItem('authToken') || '');
+        xhr.upload.addEventListener('progress', (event) => {
+            if (!event.lengthComputable) return;
+            const percent = Math.round(event.loaded / event.total * 100);
+            firmwareProgressBar.style.width = percent + '%';
+            firmwareProgressText.textContent = percent + '%';
+        });
+        xhr.addEventListener('load', () => {
+            let result;
+            try { result = JSON.parse(xhr.responseText); } catch (_) { result = {}; }
+            if (xhr.status === 401) {
+                localStorage.removeItem('authToken');
+                window.location.replace('/login');
+            } else if (xhr.status >= 200 && xhr.status < 300 && result.success) {
+                showFirmwareMessage(result.message || 'Firmware uploaded. Rebooting...', 'success');
+                firmwareProgressText.textContent = 'Complete';
+                startFirmwareRebootCountdown();
+            } else {
+                showFirmwareMessage(result.message || 'Firmware update failed', 'danger');
+            }
+        });
+        xhr.addEventListener('error', () => showFirmwareMessage('Firmware upload failed', 'danger'));
+        xhr.send(file);
+    }
+
+    function showFirmwareMessage(text, type) {
+        firmwareMessage.className = 'alert alert-' + type;
+        firmwareMessage.textContent = text;
+        firmwareMessage.style.display = 'block';
+    }
+
+    function startFirmwareRebootCountdown() {
+        let seconds = 10;
+        firmwareBrowseBtn.disabled = true;
+        firmwareDropzone.classList.add('firmware-restarting');
+        firmwareRebootCountdown.hidden = false;
+        firmwareRebootCountdown.textContent = 'Device is restarting. Please wait ' + seconds + ' seconds...';
+        clearInterval(firmwareRebootTimer);
+        firmwareRebootTimer = setInterval(() => {
+            seconds--;
+            if (seconds <= 0) {
+                clearInterval(firmwareRebootTimer);
+                firmwareRebootCountdown.textContent = 'Restart in progress. The device should be available shortly.';
+            } else {
+                firmwareRebootCountdown.textContent = 'Device is restarting. Please wait ' + seconds + ' seconds...';
+            }
+        }, 1000);
+    }
 
     document.getElementById('factoryResetBtn').addEventListener('click', async function () {
         const modal = document.getElementById('factoryResetModal');

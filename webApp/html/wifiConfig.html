@@ -20,7 +20,7 @@
             <label>Password</label>
             <div class="input-with-toggle">
                 <input type="password" id="wifiPass" class="form-control" placeholder="Leave empty for open networks">
-                <button type="button" class="btn-pw-toggle" onclick="togglePwField('wifiPass',this)" title="Show/hide password">&#128065;</button>
+                <button type="button" class="btn-pw-toggle" onclick="togglePwField('wifiPass',this)" title="Show/hide password" aria-label="Show password"><span class="password-icon" aria-hidden="true"></span></button>
             </div>
         </div>
         <button type="submit" class="btn btn-primary" id="connectBtn">Connect</button>
@@ -57,9 +57,9 @@
         }
         list.innerHTML = result.data.networks.map((n, i) => {
             const sig = n.rssi > -50 ? 'excellent' : n.rssi > -65 ? 'good' : n.rssi > -75 ? 'fair' : 'poor';
-            const lock = n.encrypted ? '&#128274;' : '&#128275;';
+            const security = n.encrypted ? 'Secured' : 'Open';
             return `<div class="wifi-item" onclick="selectNetwork('${escHtmlW(n.ssid)}')">
-                <span>${lock} ${escHtmlW(n.ssid)}</span>
+                <span>${escHtmlW(n.ssid)} <small class="wifi-security">${security}</small></span>
                 <span class="wifi-signal ${sig}">${n.rssi} dBm</span>
             </div>`;
         }).join('');
@@ -105,6 +105,7 @@
         const inp = document.getElementById(id);
         const hidden = inp.type === 'password';
         inp.type = hidden ? 'text' : 'password';
-        btn.textContent = hidden ? '\uD83D\uDE48' : '\uD83D\uDC41';
+        btn.classList.toggle('is-visible', hidden);
+        btn.setAttribute('aria-label', hidden ? 'Hide password' : 'Show password');
     }
 </script>
