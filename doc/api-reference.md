@@ -101,7 +101,7 @@ Additional fields are documented per endpoint.
 | Code | Meaning |
 |---|---|
 | `200 OK` | Request succeeded (check `success` field in body) |
-| `401 Unauthorized` | Missing or invalid session token |
+| `401 Unauthorized` | Missing or invalid session token / API key |
 | `500 Internal Server Error` | Hook function returned `null` |
 
 ---
@@ -706,7 +706,7 @@ Uploads a new firmware binary and flashes it via the Arduino `Update` library. T
 
 Returns the list of all configured devices.
 
-**Authentication required:** No
+**Authentication required:** Yes
 
 **Success response:**
 
@@ -1036,7 +1036,7 @@ Schedules a device reboot (800 ms after the HTTP response is sent).
 
 ### 401 Unauthorized
 
-Returned by all protected endpoints when the `X-Auth-Token` header is missing, invalid, or the session has timed out.
+Returned by all protected endpoints when neither a valid `X-Auth-Token` nor a valid `X-API-Key` header is supplied, or the browser session has timed out. The token-management endpoints (`/api/auth/api-token/*`) accept only `X-Auth-Token`.
 
 ```json
 {
@@ -1086,7 +1086,7 @@ If the request body cannot be parsed, the response is:
 | `/api/settings/restore` | POST | Yes | Restore config backup |
 | `/api/settings/factory-reset` | POST | Yes | Erase all + reboot |
 | `/api/firmware/update` | POST | Yes | OTA firmware upload |
-| `/api/devices` | GET | No | List devices |
+| `/api/devices` | GET | Yes | List devices |
 | `/api/device-config` | GET | No | Pin availability |
 | `/api/devices/add` | POST | Yes | Add device |
 | `/api/devices/remove` | POST | Yes | Remove device |
