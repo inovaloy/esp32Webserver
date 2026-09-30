@@ -23,7 +23,8 @@
 // 531        : OLED brightness   (1 byte)
 // 532        : OLED enabled      (1 byte)
 // 533        : Admin password set flag (1 byte, 0xA5 = configured)
-// Total used : 534 bytes — well within AT25LC64 (8192 bytes)
+// 534 – 813  : 5 API token slots (32-byte hash + 24-byte name)
+// Total used : 814 bytes — well within AT25LC64 (8192 bytes)
 
 // Admin password storage
 #define ADMIN_PASS_ADDR         164
@@ -47,6 +48,11 @@
 #define OLED_BRIGHTNESS_ADDR    531
 #define OLED_ENABLED_ADDR       532
 #define ADMIN_PASSWORD_SET_ADDR 533
+#define API_TOKEN_HASH_LEN      32
+#define API_TOKEN_MAX           5
+#define API_TOKEN_NAME_LEN      24
+#define API_TOKEN_SLOT_SIZE     (API_TOKEN_HASH_LEN + API_TOKEN_NAME_LEN)
+#define API_TOKEN_BASE_ADDR     534
 #define DEFAULT_OLED_BRIGHTNESS 100
 
 // Single controllable GPIO device

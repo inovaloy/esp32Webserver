@@ -103,6 +103,18 @@ contentTypes: &contentTypes
     rtnType: *rtnJSON
     reqType: *httpPOST
 
+"/api/auth/api-token/generate" :
+    rtnType: *rtnJSON
+    reqType: *httpPOST
+
+"/api/auth/api-token/status" :
+    rtnType: *rtnJSON
+    reqType: *httpGET
+
+"/api/auth/api-token/revoke" :
+    rtnType: *rtnJSON
+    reqType: *httpPOST
+
 "/api/wifi/status" :
     rtnType: *rtnJSON
     reqType: *httpGET
