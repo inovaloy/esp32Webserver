@@ -231,6 +231,27 @@ Client-side only (stored in `localStorage`, not sent to the device):
 - **Auto Logout (minutes)** — session inactivity timeout (1–1440); saved with `POST /api/settings/save`
 - **Change Admin Password** — opens the global `#changePwModal`
 
+#### Local API Access (API Token Management)
+
+Below the password controls, the Security section exposes a panel for managing long-lived API tokens. These tokens allow scripts and home-automation tools to call the API without a browser session.
+
+**UI elements:**
+
+| Element | Purpose |
+|---|---|
+| Slot status line | Shows how many of the 5 slots are occupied; loaded via `GET /api/auth/api-token/status` |
+| Token list | Each active token shown as a row with its name and a **Revoke** button |
+| Token name input | Free-text label for the new token (max 24 characters) |
+| **Generate API Token** button | Calls `POST /api/auth/api-token/generate`; shows the raw token once |
+| Generated token field + **Copy** button | Read-only field displaying the new 64-char token; copy before dismissing |
+
+**Important:** The raw token is displayed once, immediately after generation. Once you navigate away or close the panel, the token cannot be retrieved — only revoked and replaced. Copy it to a password manager or your script immediately.
+
+**Revoking a token:**
+Each row in the token list has a **Revoke** button. Clicking it calls `POST /api/auth/api-token/revoke` with the slot number. The token becomes invalid immediately and the slot is freed.
+
+> The token management panel is only available to a browser session (`X-Auth-Token`). Requests authenticated with an API key (`X-API-Key`) cannot generate or revoke tokens.
+
 ### Network
 
 - Current network status card (IP, MAC, gateway, signal strength)
