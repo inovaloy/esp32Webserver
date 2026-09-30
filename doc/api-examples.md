@@ -7,18 +7,19 @@ This guide shows practical, copy-paste examples for controlling the ESP32 Device
 ## Table of Contents
 
 1. [Prerequisites](#1-prerequisites)
-2. [Authentication — Getting a Token](#2-authentication--getting-a-token)
-3. [Listing and Reading Devices](#3-listing-and-reading-devices)
-4. [Toggling a Device On or Off](#4-toggling-a-device-on-or-off)
-5. [Turning All Devices Off](#5-turning-all-devices-off)
-6. [Adding and Removing a Device](#6-adding-and-removing-a-device)
-7. [Reading and Saving Settings](#7-reading-and-saving-settings)
-8. [Backing Up the Configuration](#8-backing-up-the-configuration)
-9. [Checking Network Status](#9-checking-network-status)
-10. [Rebooting the Hub](#10-rebooting-the-hub)
-11. [A Reusable Python Helper Class](#11-a-reusable-python-helper-class)
-12. [Scheduling Tasks with cron / Task Scheduler](#12-scheduling-tasks-with-cron--task-scheduler)
-13. [curl Quick-Reference](#13-curl-quick-reference)
+2. [Authentication — Two Methods](#2-authentication--two-methods)
+3. [Generating and Using an API Key (Long-lived Token)](#3-generating-and-using-an-api-key-long-lived-token)
+4. [Listing and Reading Devices](#4-listing-and-reading-devices)
+5. [Toggling a Device On or Off](#5-toggling-a-device-on-or-off)
+6. [Turning All Devices Off](#6-turning-all-devices-off)
+7. [Adding and Removing a Device](#7-adding-and-removing-a-device)
+8. [Reading and Saving Settings](#8-reading-and-saving-settings)
+9. [Backing Up the Configuration](#9-backing-up-the-configuration)
+10. [Checking Network Status](#10-checking-network-status)
+11. [Rebooting the Hub](#11-rebooting-the-hub)
+12. [A Reusable Python Helper Class](#12-a-reusable-python-helper-class)
+13. [Scheduling Tasks with cron / Task Scheduler](#13-scheduling-tasks-with-cron--task-scheduler)
+14. [curl Quick-Reference](#14-curl-quick-reference)
 
 ---
 
@@ -42,11 +43,16 @@ Replace `192.168.1.42` in every example with your actual hub IP. You can find it
 
 ---
 
-## 2. Authentication — Getting a Token
+## 2. Authentication — Two Methods
 
-Every API call (except reading device state and Wi-Fi status) requires a session token. Get one by logging in first.
+The hub supports two ways to authenticate API calls:
 
-### Python
+| Method | Header | Lifetime | Best for |
+|---|---|---|---|
+| Browser session token | `X-Auth-Token: <32-char hex>` | Until idle timeout or reboot | Interactive scripts that log in each run |
+| API key | `X-API-Key: <64-char hex>` | Permanent (until revoked) | Long-running services, cron jobs, Home Assistant |
+
+### Method A — Browser Session Token (login each run)
 
 ```python
 import requests
@@ -64,31 +70,154 @@ else:
     print("Login failed:", data["message"])
 ```
 
-### curl
-
 ```bash
+# curl
 curl -s -X POST http://192.168.1.42/api/login \
   -H "Content-Type: application/json" \
   -d '{"password": "your-admin-password"}'
 ```
 
-**Response:**
+Pass `TOKEN` as `X-Auth-Token` on every subsequent request. The token expires after the configured inactivity period (default 15 minutes).
 
-```json
-{
-  "success": true,
-  "token": "a3f2e1c9b8d7e6f5a4b3c2d1e0f9a8b7",
-  "mustChangePassword": false
-}
+### Method B — API Key (set once, use forever)
+
+Generate a key once from the web interface (**Settings → Security → Local API access → Generate API Token**) or from a logged-in script (see [next section](#3-generating-and-using-an-api-key-long-lived-token)). Then pass it as `X-API-Key`:
+
+```python
+import requests
+
+HUB     = "http://192.168.1.42"
+API_KEY = "3f7a1b2c9e4d8f0a..."   # 64-char hex from Settings
+
+resp = requests.get(
+    f"{HUB}/api/devices",
+    headers={"X-API-Key": API_KEY}
+)
+print(resp.json())
 ```
 
-Save the `token` value — you will include it in the `X-Auth-Token` header of every subsequent request.
+```bash
+# curl
+curl -s http://192.168.1.42/api/devices \
+  -H "X-API-Key: 3f7a1b2c9e4d8f0a..."
+```
 
-> **Token lifetime:** The token expires after the configured inactivity timeout (default 15 minutes). If you get a `401 Unauthorized` response, log in again to get a fresh token.
+API keys survive reboots — only their SHA-256 hash is stored in EEPROM.
 
 ---
 
-## 3. Listing and Reading Devices
+## 3. Generating and Using an API Key (Long-lived Token)
+
+The easiest way is via the web UI: **Settings → Security → Local API access → Generate API Token**. Copy the token immediately — it is shown only once.
+
+To generate programmatically from a script (requires a browser session):
+
+### Python — generate, save, then use
+
+```python
+import requests
+import json
+import os
+
+HUB      = "http://192.168.1.42"
+PASSWORD = "your-admin-password"
+KEY_FILE = "hub_api_key.json"   # store the key locally
+
+# Step 1: log in with the browser session
+login = requests.post(f"{HUB}/api/login", json={"password": PASSWORD}).json()
+if not login["success"]:
+    raise RuntimeError("Login failed: " + login["message"])
+session_token = login["token"]
+session_headers = {"X-Auth-Token": session_token}
+
+# Step 2: generate an API key
+gen = requests.post(
+    f"{HUB}/api/auth/api-token/generate",
+    headers=session_headers,
+    json={"name": "My Script"}
+).json()
+
+if not gen["success"]:
+    raise RuntimeError("Token generation failed: " + gen["message"])
+
+api_key = gen["token"]
+print(f"Generated token in slot {gen['slot']} ({gen['name']})")
+print("Save this — it will NOT be shown again:", api_key)
+
+# Save it locally for future use
+with open(KEY_FILE, "w") as f:
+    json.dump({"api_key": api_key, "slot": gen["slot"], "name": gen["name"]}, f)
+
+# Step 3: log out the session (API key is now active independently)
+requests.post(f"{HUB}/api/logout", headers=session_headers)
+
+# Step 4: from now on, use the API key directly — no login needed
+resp = requests.get(f"{HUB}/api/devices", headers={"X-API-Key": api_key})
+print(resp.json())
+```
+
+### Python — list active API token slots
+
+```python
+import requests
+
+HUB           = "http://192.168.1.42"
+SESSION_TOKEN = "a3f2e1c9..."   # must be a browser session token
+
+resp = requests.get(
+    f"{HUB}/api/auth/api-token/status",
+    headers={"X-Auth-Token": SESSION_TOKEN}
+)
+data = resp.json()
+print(f"Slots used: {len(data['tokens'])} / {data['capacity']}")
+for t in data["tokens"]:
+    print(f"  Slot {t['slot']}: {t['name']}")
+```
+
+### Python — revoke an API token
+
+```python
+import requests
+
+HUB           = "http://192.168.1.42"
+SESSION_TOKEN = "a3f2e1c9..."
+
+resp = requests.post(
+    f"{HUB}/api/auth/api-token/revoke",
+    headers={"X-Auth-Token": SESSION_TOKEN},
+    json={"slot": 0}
+)
+print(resp.json()["message"])   # "API token revoked"
+```
+
+### curl — generate
+
+```bash
+curl -s -X POST http://192.168.1.42/api/auth/api-token/generate \
+  -H "Content-Type: application/json" \
+  -H "X-Auth-Token: <session-token>" \
+  -d '{"name": "Night script"}'
+```
+
+### curl — list slots
+
+```bash
+curl -s http://192.168.1.42/api/auth/api-token/status \
+  -H "X-Auth-Token: <session-token>"
+```
+
+### curl — revoke slot 0
+
+```bash
+curl -s -X POST http://192.168.1.42/api/auth/api-token/revoke \
+  -H "Content-Type: application/json" \
+  -H "X-Auth-Token: <session-token>" \
+  -d '{"slot": 0}'
+```
+
+---
+
+## 4. Listing and Reading Devices
 
 Get all devices and their current ON/OFF states — **no authentication required**.
 
@@ -125,7 +254,7 @@ curl -s http://192.168.1.42/api/devices
 
 ---
 
-## 4. Toggling a Device On or Off
+## 5. Toggling a Device On or Off
 
 Toggle a specific device by its index number. Index 0 is the first device in the list, index 1 is the second, and so on.
 
@@ -198,7 +327,7 @@ curl -s -X POST http://192.168.1.42/api/devices/toggle \
 
 ---
 
-## 5. Turning All Devices Off
+## 6. Turning All Devices Off
 
 Useful for a bedtime or "leaving home" script.
 
@@ -262,7 +391,7 @@ print("Logged out")
 
 ---
 
-## 6. Adding and Removing a Device
+## 7. Adding and Removing a Device
 
 ### Python — Add a device
 
@@ -324,7 +453,7 @@ curl -s -X POST http://192.168.1.42/api/devices/add \
 
 ---
 
-## 7. Reading and Saving Settings
+## 8. Reading and Saving Settings
 
 ### Python — Read settings
 
@@ -370,7 +499,7 @@ print(resp.json()["message"])
 
 ---
 
-## 8. Backing Up the Configuration
+## 9. Backing Up the Configuration
 
 ### Python — Save backup to a file
 
@@ -423,7 +552,7 @@ curl -s http://192.168.1.42/api/settings/backup \
 
 ---
 
-## 9. Checking Network Status
+## 10. Checking Network Status
 
 ### Python
 
@@ -453,7 +582,7 @@ curl -s http://192.168.1.42/api/wifi/status
 
 ---
 
-## 10. Rebooting the Hub
+## 11. Rebooting the Hub
 
 ```python
 import requests
@@ -489,7 +618,7 @@ curl -s -X POST http://192.168.1.42/api/reboot \
 
 ---
 
-## 11. A Reusable Python Helper Class
+## 12. A Reusable Python Helper Class
 
 Copy this class into your own scripts to avoid repeating login/auth boilerplate.
 
@@ -608,7 +737,7 @@ hub.logout()
 
 ---
 
-## 12. Scheduling Tasks with cron / Task Scheduler
+## 13. Scheduling Tasks with cron / Task Scheduler
 
 ### Linux / macOS — cron
 
@@ -640,20 +769,24 @@ hub.logout()
 
 ---
 
-## 13. curl Quick-Reference
+## 14. curl Quick-Reference
+
+> Replace `HUB` with your device IP (e.g. `192.168.1.42`), `SESSION` with the 32-char browser token, and `APIKEY` with a 64-char API key.
 
 | Action | curl command |
 |---|---|
-| Login | `curl -s -X POST http://HUB/api/login -H "Content-Type: application/json" -d '{"password":"PASS"}'` |
-| List devices | `curl -s http://HUB/api/devices` |
-| Turn device 0 ON | `curl -s -X POST http://HUB/api/devices/toggle -H "Content-Type: application/json" -H "X-Auth-Token: TOKEN" -d '{"index":0,"state":true}'` |
-| Turn device 0 OFF | `curl -s -X POST http://HUB/api/devices/toggle -H "Content-Type: application/json" -H "X-Auth-Token: TOKEN" -d '{"index":0,"state":false}'` |
+| Login (get session token) | `curl -s -X POST http://HUB/api/login -H "Content-Type: application/json" -d '{"password":"PASS"}'` |
+| List devices (no auth) | `curl -s http://HUB/api/devices` |
+| Turn device 0 ON (session) | `curl -s -X POST http://HUB/api/devices/toggle -H "Content-Type: application/json" -H "X-Auth-Token: SESSION" -d '{"index":0,"state":true}'` |
+| Turn device 0 ON (API key) | `curl -s -X POST http://HUB/api/devices/toggle -H "Content-Type: application/json" -H "X-API-Key: APIKEY" -d '{"index":0,"state":true}'` |
+| Turn device 0 OFF (API key) | `curl -s -X POST http://HUB/api/devices/toggle -H "Content-Type: application/json" -H "X-API-Key: APIKEY" -d '{"index":0,"state":false}'` |
 | Network status | `curl -s http://HUB/api/wifi/status` |
-| Read settings | `curl -s http://HUB/api/settings -H "X-Auth-Token: TOKEN"` |
-| Backup config | `curl -s http://HUB/api/settings/backup -H "X-Auth-Token: TOKEN" -o backup.json` |
-| Reboot | `curl -s -X POST http://HUB/api/reboot -H "X-Auth-Token: TOKEN"` |
-| Logout | `curl -s -X POST http://HUB/api/logout -H "X-Auth-Token: TOKEN"` |
-
-Replace `HUB` with your device IP (e.g. `192.168.1.42`) and `TOKEN` with the token from the login response.
+| Read settings | `curl -s http://HUB/api/settings -H "X-API-Key: APIKEY"` |
+| Backup config | `curl -s http://HUB/api/settings/backup -H "X-API-Key: APIKEY" -o backup.json` |
+| Generate API token | `curl -s -X POST http://HUB/api/auth/api-token/generate -H "Content-Type: application/json" -H "X-Auth-Token: SESSION" -d '{"name":"My Script"}'` |
+| List token slots | `curl -s http://HUB/api/auth/api-token/status -H "X-Auth-Token: SESSION"` |
+| Revoke token slot 0 | `curl -s -X POST http://HUB/api/auth/api-token/revoke -H "Content-Type: application/json" -H "X-Auth-Token: SESSION" -d '{"slot":0}'` |
+| Reboot | `curl -s -X POST http://HUB/api/reboot -H "X-API-Key: APIKEY"` |
+| Logout | `curl -s -X POST http://HUB/api/logout -H "X-Auth-Token: SESSION"` |
 
 > **Tip:** On Windows PowerShell, use double quotes around the `-d` JSON and escape inner quotes with `\"`. On macOS/Linux bash, single quotes around the JSON body are simpler.

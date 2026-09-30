@@ -12,6 +12,9 @@ This document describes every HTTP endpoint exposed by the ESP32 Device Hub firm
   - [POST /api/logout](#post-apilogout)
   - [POST /api/auth/change-password](#post-apiauthchange-password)
   - [POST /api/auth/set-initial-password](#post-apiauthset-initial-password)
+  - [POST /api/auth/api-token/generate](#post-apiauthapi-tokengenerate)
+  - [GET /api/auth/api-token/status](#get-apiauthapi-tokenstatus)
+  - [POST /api/auth/api-token/revoke](#post-apiauthapi-tokenrevoke)
 - [Wi-Fi](#wi-fi)
   - [GET /api/wifi/status](#get-apiwifistatus)
   - [GET /api/wifi/scan](#get-apiwifiscan)
@@ -45,15 +48,36 @@ This document describes every HTTP endpoint exposed by the ESP32 Device Hub firm
 
 All requests are relative to the device IP, e.g. `http://192.168.1.42`.
 
-### Authentication
+### Authentication — Two Methods
 
-Protected endpoints require the `X-Auth-Token` header set to the session token obtained from `POST /api/login`. Requests without a valid token receive `401 Unauthorized`.
+The hub supports two independent authentication methods. Any protected endpoint accepts either one.
+
+#### 1. Browser Session Token (`X-Auth-Token`)
+
+Obtained from `POST /api/login`. A 32-character random hex string stored in RAM only — cleared on every reboot.
 
 ```
-X-Auth-Token: a3f2e1c9...  (32-character hex string)
+X-Auth-Token: a3f2e1c9b8d7e6f5a4b3c2d1e0f9a8b7
 ```
 
-The token is stored in RAM only; it is lost on reboot. Sessions expire after a configurable idle period (default 15 minutes, range 1–1440 minutes).
+- Expires after the configured inactivity timeout (default 15 minutes)
+- Only one active session at a time
+- Intended for the web browser interface
+
+#### 2. API Key (`X-API-Key`)
+
+A long-lived 64-character token generated via `POST /api/auth/api-token/generate`. Only its **SHA-256 hash** is stored in EEPROM — the raw token is shown exactly once at generation time and never stored on the device.
+
+```
+X-API-Key: 3f7a1b2c...  (64-character hex string)
+```
+
+- Persists across reboots (hash stored in EEPROM)
+- Up to **5** named tokens can be active simultaneously
+- Intended for scripts, home automation, and programmatic access
+- **Cannot** be used to generate further API tokens (only a browser session can do that)
+
+> If a request carries both headers, either one being valid is sufficient to authorise it.
 
 ### Request Body
 
@@ -210,6 +234,115 @@ Sets the admin password when `mustChangePassword` is `true` (factory default in 
 { "success": false, "message": "Initial password is already configured" }
 { "success": false, "message": "Password must be 6 to 32 characters" }
 ```
+
+---
+
+### POST /api/auth/api-token/generate
+
+Generates a new long-lived API token and stores its SHA-256 hash in an EEPROM slot. The raw token is returned **once only** — it cannot be retrieved again.
+
+**Authentication required:** Browser session only (`X-Auth-Token`). An existing API key cannot be used to generate new tokens.
+
+**Request body:**
+
+```json
+{
+  "name": "Home Assistant"
+}
+```
+
+| Field | Type | Constraints |
+|---|---|---|
+| `name` | string | 1–24 characters; used to identify the token in the slot list |
+
+**Success response:**
+
+```json
+{
+  "success": true,
+  "slot": 0,
+  "name": "Home Assistant",
+  "token": "3f7a1b2c9e4d8f0a...(64 hex chars)...",
+  "message": "Copy this token now. It will not be shown again."
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `slot` | number | EEPROM slot index (0–4); used when revoking |
+| `name` | string | The name you provided |
+| `token` | string | 64-character hex API key — **copy it now, it will never be shown again** |
+
+**Failure responses:**
+
+```json
+{ "success": false, "message": "Token name required" }
+{ "success": false, "message": "All token slots are full or the name is invalid" }
+```
+
+> There are **5 slots** available. If all are occupied, revoke an existing token first.
+
+---
+
+### GET /api/auth/api-token/status
+
+Returns the list of active API token slots (names and slot numbers only — never the token values or hashes).
+
+**Authentication required:** Browser session only (`X-Auth-Token`)
+
+**Success response:**
+
+```json
+{
+  "success": true,
+  "capacity": 5,
+  "tokens": [
+    { "slot": 0, "name": "Home Assistant" },
+    { "slot": 2, "name": "Night script" }
+  ]
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `capacity` | number | Total available slots (always 5) |
+| `tokens` | array | Active slots; empty slots are omitted |
+| `tokens[].slot` | number | Slot index (0–4) |
+| `tokens[].name` | string | Name assigned at generation time |
+
+---
+
+### POST /api/auth/api-token/revoke
+
+Revokes (deletes) an active API token by slot number. The token immediately stops working.
+
+**Authentication required:** Browser session only (`X-Auth-Token`)
+
+**Request body:**
+
+```json
+{
+  "slot": 0
+}
+```
+
+**Success response:**
+
+```json
+{
+  "success": true,
+  "message": "API token revoked",
+  "name": "Home Assistant"
+}
+```
+
+**Failure responses:**
+
+```json
+{ "success": false, "message": "Valid active token slot required" }
+```
+
+> After revoking, the slot is free and can be reused by generating a new token.
 
 ---
 
@@ -933,12 +1066,17 @@ If the request body cannot be parsed, the response is:
 
 ## Quick Reference Table
 
+> **Auth column key:** `No` = public; `Session` = browser `X-Auth-Token` only; `Yes` = either `X-Auth-Token` or `X-API-Key`.
+
 | Endpoint | Method | Auth | Description |
 |---|---|---|---|
-| `/api/login` | POST | No | Log in, get token |
+| `/api/login` | POST | No | Log in, get session token |
 | `/api/logout` | POST | Yes | Invalidate session |
 | `/api/auth/change-password` | POST | Yes | Change admin password |
 | `/api/auth/set-initial-password` | POST | Yes | Set first-time password |
+| `/api/auth/api-token/generate` | POST | Session | Generate a long-lived API key |
+| `/api/auth/api-token/status` | GET | Session | List active API token slots |
+| `/api/auth/api-token/revoke` | POST | Session | Revoke an API token slot |
 | `/api/wifi/status` | GET | No | Network status |
 | `/api/wifi/scan` | GET | No | Scan Wi-Fi networks |
 | `/api/wifi/connect` | POST | Yes | Join a Wi-Fi network |

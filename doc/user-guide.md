@@ -17,6 +17,7 @@ Welcome to the **ESP32 Device Hub**. This guide is written for everyday users �
 9. [Removing a Device](#9-removing-a-device)
 10. [The Settings Page](#10-the-settings-page)
 11. [Changing the Admin Password](#11-changing-the-admin-password)
+   - [API Tokens for Scripts and Automation](#api-tokens-for-scripts-and-automation)
 12. [Logging Out](#12-logging-out)
 13. [Rebooting the Device](#13-rebooting-the-device)
 14. [The OLED Display](#14-the-oled-display)
@@ -227,7 +228,7 @@ Click **Settings** from the bottom nav bar or the avatar menu (top-right). The s
 | **General** | Change the controller name (shown in the header and on the OLED) |
 | **Display** | Adjust OLED brightness (1–255) or turn the display on/off |
 | **Appearance** | Switch between light/dark mode; choose an accent colour |
-| **Security** | Change auto-logout timeout; change admin password |
+| **Security** | Change auto-logout timeout; change admin password; manage API tokens for scripts |
 | **Network** | View current connection info; scan and connect to Wi-Fi |
 | **Backup & Restore** | Download or upload your device configuration as a JSON file |
 | **Firmware** | Upload a new firmware `.bin` file (OTA update) |
@@ -254,6 +255,28 @@ Most sections have their own **Save** button. After saving, a green confirmation
 After saving, the current session is ended and you are taken back to the login page. Log in with the new password.
 
 > There is no "forgot password" feature — keep your password safe. If you are locked out, a [factory reset](factory-reset.md) will restore the default password.
+
+---
+
+### API Tokens for Scripts and Automation
+
+The **Security** section also has a **Local API access** panel. This is for advanced users who want to control the hub from a Python script, Home Assistant, or any other tool without going through the browser login flow every time.
+
+An API token is a long password (64 characters) that you generate once, copy, and store in your script. It works just like being logged in — but it never expires unless you revoke it.
+
+**To generate a token:**
+1. Go to **Settings → Security**
+2. Scroll down to **Local API access**
+3. Type a name for the token (e.g., `Home Assistant` or `Night script`) — max 24 characters
+4. Click **Generate API Token**
+5. A box appears with the token value — **copy it now**. It will never be shown again.
+
+**To revoke a token:**
+Each saved token appears in a list with its name and a **Revoke** button. Clicking Revoke deletes it permanently.
+
+You can have up to **5 tokens** active at the same time.
+
+> For usage examples see [api-examples.md](api-examples.md).
 
 ---
 

@@ -300,7 +300,7 @@ void    storageCommit();                           // no-op for external EEPROM
 
 These functions are compiled to either:
 
-- **Internal** — Arduino `EEPROM` library (NVS-backed, `EEPROM_SIZE = 600` bytes)
+- **Internal** — Arduino `EEPROM` library (NVS-backed, `EEPROM_SIZE = 850` bytes)
 - **External** — raw I²C byte-by-byte access to the 24LC64 at `0x50` (8 192 bytes)
 
 The `CFG_STORAGE_EXTERNAL` macro (from `autoGenDeviceConfig.h`) selects the backend at compile time.
@@ -320,6 +320,7 @@ The `CFG_STORAGE_EXTERNAL` macro (from `autoGenDeviceConfig.h`) selects the back
 | 531 | 1 B | OLED brightness |
 | 532 | 1 B | OLED enabled flag |
 | 533 | 1 B | Admin password configured flag `0xA5` |
+| 534 – 813 | 280 B | 5 × 56-byte API token slots (see below) |
 
 Each 36-byte device slot:
 
@@ -331,6 +332,15 @@ Each 36-byte device slot:
 | 18 | 1 B | Automation enabled (0/1) |
 | 19 | 1 B | Ping interval (seconds, 5–255) |
 | 20 – 35 | 16 B | Ping target IP (dotted-decimal string) |
+
+Each 56-byte API token slot (`API_TOKEN_SLOT_SIZE = 56`):
+
+| Offset | Size | Field |
+|---|---|---|
+| 0 – 31 | 32 B | SHA-256 hash of the raw token |
+| 32 – 55 | 24 B | Token name (null-terminated string) |
+
+> Only the **hash** is stored, never the raw 64-character token. This means a compromised EEPROM dump cannot be used to recover valid tokens.
 
 ### Thread-Safety Note
 
@@ -344,22 +354,51 @@ Each 36-byte device slot:
 
 ## 10. Authentication and Session Management
 
-The server maintains **a single session slot** (one logged-in user at a time):
+The server supports two independent authentication methods, checked in order by the `isAuthorised()` dispatcher:
+
+```cpp
+static bool isAuthorised(httpd_req_t *req) {
+    return isBrowserAuthorised(req) || isApiKeyAuthorised(req);
+}
+```
+
+### Browser Session Token (`isBrowserAuthorised`)
+
+A single in-RAM slot:
 
 ```cpp
 static char sessionToken[33] = {0};   // 32-char hex + null
 static unsigned long sessionLastActivity = 0;
 ```
 
-### Token Lifecycle
-
-1. **Login** (`POST /api/login`): password verified → `esp_random()` generates 32 hex chars → token stored in RAM
+**Lifecycle:**
+1. **Login** (`POST /api/login`): password verified → `esp_random()` fills 32 hex chars → stored in RAM
 2. **Authorised request**: `X-Auth-Token` header compared with constant-time XOR; `sessionLastActivity` updated
 3. **Idle timeout**: if `millis() - sessionLastActivity >= logoutMinutes * 60000`, token zeroed
 4. **Logout** (`POST /api/logout`): token zeroed
 5. **Reboot**: token lost (RAM only — intentional)
 
-All protected endpoints call `isAuthorised(req)` before processing. Unauthenticated requests receive `401 Unauthorized` JSON.
+### API Key (`isApiKeyAuthorised`)
+
+Long-lived tokens stored as SHA-256 hashes in EEPROM:
+
+```cpp
+uint8_t apiTokenHashes[API_TOKEN_MAX][API_TOKEN_HASH_LEN]; // [5][32]
+char    apiTokenNames[API_TOKEN_MAX][API_TOKEN_NAME_LEN + 1]; // [5][25]
+```
+
+**Lifecycle:**
+1. **Generate** (`POST /api/auth/api-token/generate`): `esp_random()` fills 64 hex chars → SHA-256 hashed via `SHA256Builder` → hash written to first free EEPROM slot → raw token returned once
+2. **Authorised request**: `X-API-Key` header hashed → constant-time comparison against all occupied slots
+3. **Revoke** (`POST /api/auth/api-token/revoke`): slot zeroed in RAM and EEPROM; token immediately invalid
+4. **Factory reset**: `clearApiTokenSlot()` called for all 5 slots
+
+**Security properties:**
+- Raw 64-character tokens are generated with `esp_random()` and never stored anywhere on the device
+- Hash comparison uses a byte-XOR accumulator to prevent timing attacks
+- API key endpoints (`generate`, `status`, `revoke`) require **browser session only** — an API key cannot bootstrap more API keys
+
+All protected endpoints (except the three API token management endpoints) accept either auth method.
 
 ---
 
