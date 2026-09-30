@@ -408,6 +408,35 @@ a:hover { text-decoration: underline; }
 .settings-action:hover { color: var(--green); }
 .settings-action:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 3px; }
 .settings-action-detail { display: block; margin-top: 3px; color: var(--text-faint); font-size: 12px; font-weight: 400; }
+.settings-api-access { margin: 18px 0 4px; padding: 14px 0; border-top: 1px solid var(--border); }
+.settings-api-heading { color: var(--text); font-size: 14px; font-weight: 650; }
+.settings-api-status { margin-top: 8px; font-size: 12px; font-weight: 600; }
+.settings-api-status.is-active { color: #2e9e4f; }
+.settings-api-status.is-empty { color: var(--text-muted); }
+.settings-api-token-list { display: grid; gap: 6px; margin-top: 10px; }
+.settings-api-token-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 13px;
+}
+.settings-api-token-item span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-api-token-item .btn { padding: 5px 10px; font-size: 12px; flex: 0 0 auto; }
+.settings-api-name-row { margin-top: 10px; }
+.settings-api-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.settings-api-actions .btn { font-size: 13px; }
+.settings-api-token-row { display: flex; gap: 8px; margin-top: 10px; }
+.settings-api-token-row .form-control { min-width: 0; font-family: monospace; font-size: 12px; }
+.settings-api-token-row .btn { flex: 0 0 auto; }
+.settings-api-message { min-height: 18px; margin-top: 8px; color: var(--text-muted); font-size: 12px; }
+.settings-api-message.is-success { color: #2e9e4f; }
+.settings-api-message.is-error { color: #d64545; }
 .settings-primary-action { color: var(--green); font-weight: 600; }
 .settings-danger { color: var(--red); }
 .settings-toggle { display: block; margin: 0 0 16px; color: var(--text); font-size: 14px; }

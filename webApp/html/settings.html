@@ -78,6 +78,23 @@
                     <input type="number" id="logoutMinutes" class="form-control" min="1" max="1440" step="1">
                 </div>
                 <button class="settings-action" id="changePasswordBtn">Change Admin Password <span class="settings-action-detail">Update the administrator password</span></button>
+                <div class="settings-api-access">
+                    <div class="settings-api-heading">Local API access</div>
+                    <p class="settings-action-detail">Up to five named tokens can be saved for trusted local scripts. Each token is shown only once.</p>
+                    <div class="settings-api-status" id="apiTokenStatus">Checking token slots...</div>
+                    <div class="settings-api-token-list" id="apiTokenList"></div>
+                    <div class="settings-api-name-row">
+                        <input type="text" class="form-control" id="apiTokenName" maxlength="24" placeholder="Token name, e.g. Home Assistant">
+                    </div>
+                    <div class="settings-api-actions">
+                        <button class="btn btn-primary" id="generateApiTokenBtn" type="button">Generate API Token</button>
+                    </div>
+                    <div class="settings-api-token-row" id="apiTokenRow" hidden>
+                        <input type="text" class="form-control" id="apiTokenValue" readonly aria-label="Generated API token">
+                        <button class="btn btn-cancel" id="copyApiTokenBtn" type="button">Copy</button>
+                    </div>
+                    <div id="apiTokenMessage" class="settings-api-message" role="status"></div>
+                </div>
                 <button class="btn btn-primary settings-section-button" id="saveSecurityBtn" type="button">Save Security Settings</button>
             </section>
 
@@ -203,6 +220,70 @@
     document.getElementById('saveDisplayBtn').addEventListener('click', () => document.getElementById('saveSettingsBtn').click());
     document.getElementById('saveSecurityBtn').addEventListener('click', () => document.getElementById('saveSettingsBtn').click());
 
+    const apiTokenRow = document.getElementById('apiTokenRow');
+    const apiTokenValue = document.getElementById('apiTokenValue');
+    const apiTokenMessage = document.getElementById('apiTokenMessage');
+    const apiTokenStatus = document.getElementById('apiTokenStatus');
+    const apiTokenList = document.getElementById('apiTokenList');
+    const apiTokenName = document.getElementById('apiTokenName');
+    const generateApiTokenBtn = document.getElementById('generateApiTokenBtn');
+    async function loadApiTokenStatus() {
+        const result = await api.get('/api/auth/api-token/status');
+        const tokens = result.success && result.data.success ? result.data.tokens || [] : [];
+        const capacity = result.success && result.data.success ? result.data.capacity || 5 : 5;
+        apiTokenStatus.textContent = tokens.length + ' of ' + capacity + ' token slots used';
+        apiTokenStatus.className = 'settings-api-status ' + (tokens.length ? 'is-active' : 'is-empty');
+        generateApiTokenBtn.disabled = tokens.length >= capacity;
+        apiTokenList.innerHTML = tokens.map(token =>
+            '<div class="settings-api-token-item"><span>' + escSettings(token.name) + '</span>' +
+            '<button type="button" class="btn btn-cancel" data-revoke-token="' + token.slot + '">Revoke</button></div>'
+        ).join('');
+        apiTokenList.querySelectorAll('[data-revoke-token]').forEach(button => {
+            button.addEventListener('click', async () => {
+                if (!window.confirm('Revoke token "' + button.parentElement.querySelector('span').textContent + '"?')) return;
+                button.disabled = true;
+                const revokeResult = await api.post('/api/auth/api-token/revoke', { slot: Number(button.dataset.revokeToken) });
+                apiTokenMessage.textContent = revokeResult.success && revokeResult.data.success ? revokeResult.data.message : (revokeResult.data && revokeResult.data.message || 'Could not revoke token');
+                apiTokenMessage.className = 'settings-api-message ' + (revokeResult.success && revokeResult.data.success ? 'is-success' : 'is-error');
+                if (revokeResult.success && revokeResult.data.success) loadApiTokenStatus();
+            });
+        });
+    }
+    loadApiTokenStatus();
+    generateApiTokenBtn.addEventListener('click', async function () {
+        const name = apiTokenName.value.trim();
+        if (!name) {
+            apiTokenMessage.textContent = 'Enter a name for this token first';
+            apiTokenMessage.className = 'settings-api-message is-error';
+            apiTokenName.focus();
+            return;
+        }
+        this.disabled = true;
+        const result = await api.post('/api/auth/api-token/generate', { name: name });
+        this.disabled = false;
+        if (!result.success || !result.data.success) {
+            apiTokenMessage.textContent = result.data && result.data.message || 'Could not generate API token';
+            apiTokenMessage.className = 'settings-api-message is-error';
+            return;
+        }
+        apiTokenValue.value = result.data.token;
+        apiTokenRow.hidden = false;
+        apiTokenName.value = '';
+        loadApiTokenStatus();
+        apiTokenMessage.textContent = result.data.message;
+        apiTokenMessage.className = 'settings-api-message is-success';
+    });
+    document.getElementById('copyApiTokenBtn').addEventListener('click', async function () {
+        try {
+            await navigator.clipboard.writeText(apiTokenValue.value);
+            apiTokenMessage.textContent = 'Token copied to clipboard';
+            apiTokenMessage.className = 'settings-api-message is-success';
+        } catch (error) {
+            apiTokenValue.select();
+            apiTokenMessage.textContent = 'Copy failed; select and copy the token manually';
+            apiTokenMessage.className = 'settings-api-message is-error';
+        }
+    });
     const themePreference = document.getElementById('themePreference');
     const savedTheme = localStorage.getItem('theme');
     themePreference.value = savedTheme === 'light' || savedTheme === 'dark' ? savedTheme : 'system';

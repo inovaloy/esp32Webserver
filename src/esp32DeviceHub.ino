@@ -24,7 +24,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // WiFi Configuration
 #define WIFI_TIMEOUT 20000
-#define EEPROM_SIZE 600    // AT25LC64 = 8192 bytes; internal flash emulation needs >=534
+#define EEPROM_SIZE 850    // AT25LC64 = 8192 bytes; internal flash emulation covers token slots
 #define SSID_ADDR 0
 #define PASS_ADDR 100
 #define MAX_SSID_LENGTH 32
@@ -58,6 +58,8 @@ char controllerName[CONTROLLER_NAME_LEN];
 uint16_t logoutMinutes = DEFAULT_LOGOUT_MINUTES;
 uint8_t oledBrightness = DEFAULT_OLED_BRIGHTNESS;
 bool oledEnabled = true;
+uint8_t apiTokenHashes[API_TOKEN_MAX][API_TOKEN_HASH_LEN] = {{0}};
+char apiTokenNames[API_TOKEN_MAX][API_TOKEN_NAME_LEN + 1] = {{0}};
 bool adminPasswordChangeRequired = true;
 
 // AP credentials — derived from MAC at runtime
@@ -181,6 +183,9 @@ bool isHighVoltageDevice(uint8_t pin);
 void loadAdminPasswordFromEEPROM();
 void saveAdminPassword(const char* newPassword, bool markConfigured = true);
 bool checkAdminPassword(const char* attempt);
+void loadApiTokenFromEEPROM();
+void saveApiTokenSlot(uint8_t slot, const uint8_t* hash, const char* name);
+void clearApiTokenSlot(uint8_t slot);
 void loadControllerSettings();
 void saveControllerSettings(const char* name, uint16_t minutes);
 void saveOledSettings(uint8_t brightness, bool enabled);
@@ -272,6 +277,7 @@ void setup()
 
     // Load saved admin password (or set MAC-derived default on first boot)
     loadAdminPasswordFromEEPROM();
+    loadApiTokenFromEEPROM();
 
     // Load saved devices and restore GPIO states
     loadDevicesFromEEPROM();
@@ -1056,6 +1062,48 @@ void saveAdminPassword(const char* newPassword, bool markConfigured) {
     eepromDirty = true;
 }
 
+void loadApiTokenFromEEPROM() {
+    memset(apiTokenHashes, 0, sizeof(apiTokenHashes));
+    memset(apiTokenNames, 0, sizeof(apiTokenNames));
+    if (!eepromIsValid()) return;
+    for (int slot = 0; slot < API_TOKEN_MAX; slot++) {
+        int base = API_TOKEN_BASE_ADDR + slot * API_TOKEN_SLOT_SIZE;
+        for (int i = 0; i < API_TOKEN_HASH_LEN; i++)
+            apiTokenHashes[slot][i] = storageRead(base + i);
+        for (int i = 0; i < API_TOKEN_NAME_LEN; i++)
+            apiTokenNames[slot][i] = (char)storageRead(base + API_TOKEN_HASH_LEN + i);
+        apiTokenNames[slot][API_TOKEN_NAME_LEN] = '\0';
+    }
+    // Migrate the previous single-token format, whose marker occupied the
+    // first byte of the new slot-1 name area.
+    if ((uint8_t)apiTokenNames[0][0] == 0xA5) {
+        strncpy(apiTokenNames[0], "Legacy token", API_TOKEN_NAME_LEN);
+        apiTokenNames[0][API_TOKEN_NAME_LEN] = '\0';
+        saveApiTokenSlot(0, apiTokenHashes[0], apiTokenNames[0]);
+    }
+}
+
+void saveApiTokenSlot(uint8_t slot, const uint8_t* hash, const char* name) {
+    if (slot >= API_TOKEN_MAX) return;
+    int base = API_TOKEN_BASE_ADDR + slot * API_TOKEN_SLOT_SIZE;
+    memcpy(apiTokenHashes[slot], hash, API_TOKEN_HASH_LEN);
+    strncpy(apiTokenNames[slot], name, API_TOKEN_NAME_LEN);
+    apiTokenNames[slot][API_TOKEN_NAME_LEN] = '\0';
+    for (int i = 0; i < API_TOKEN_HASH_LEN; i++) storageWrite(base + i, apiTokenHashes[slot][i]);
+    for (int i = 0; i < API_TOKEN_NAME_LEN; i++) storageWrite(base + API_TOKEN_HASH_LEN + i, (uint8_t)apiTokenNames[slot][i]);
+    storageWrite(EEPROM_MAGIC_ADDR, EEPROM_MAGIC_BYTE);
+    eepromDirty = true;
+}
+
+void clearApiTokenSlot(uint8_t slot) {
+    if (slot >= API_TOKEN_MAX) return;
+    int base = API_TOKEN_BASE_ADDR + slot * API_TOKEN_SLOT_SIZE;
+    memset(apiTokenHashes[slot], 0, API_TOKEN_HASH_LEN);
+    memset(apiTokenNames[slot], 0, API_TOKEN_NAME_LEN + 1);
+    for (int i = 0; i < API_TOKEN_SLOT_SIZE; i++) storageWrite(base + i, 0);
+    eepromDirty = true;
+}
+
 bool checkAdminPassword(const char* attempt) {
     uint8_t diff = 0;
     for (int i = 0; i < ADMIN_PASS_LEN; i++)
@@ -1114,6 +1162,7 @@ void applyOledSettings() {
 
 void factoryResetSettings() {
     for (int i = 0; i < EEPROM_SIZE; i++) storageWrite(i, 0);
+    for (int slot = 0; slot < API_TOKEN_MAX; slot++) clearApiTokenSlot(slot);
     deviceCount = 0;
     saveControllerSettings("Home Controller", DEFAULT_LOGOUT_MINUTES);
     saveOledSettings(DEFAULT_OLED_BRIGHTNESS, true);

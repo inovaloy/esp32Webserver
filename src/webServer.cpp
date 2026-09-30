@@ -10,6 +10,7 @@
 #include <ETH.h>
 #include <EEPROM.h>
 #include <Update.h>
+#include <SHA2Builder.h>
 #include <string.h>
 
 // Device state and admin auth owned by the .ino
@@ -33,12 +34,25 @@ extern void          factoryResetSettings();
 extern void          scheduleReboot();
 extern uint8_t        storageRead(int address);
 extern void           storageWrite(int address, uint8_t value);
+extern uint8_t        apiTokenHashes[][API_TOKEN_HASH_LEN];
+extern char           apiTokenNames[][API_TOKEN_NAME_LEN + 1];
+extern void           saveApiTokenSlot(uint8_t slot, const uint8_t* hash, const char* name);
+extern void           clearApiTokenSlot(uint8_t slot);
 
 // ── Session token (single slot, RAM only — cleared on reboot) ─────────────
 #define SESSION_TOKEN_LEN 32
+#define API_TOKEN_LEN 64
 #define SESSION_INACTIVITY_MS ((unsigned long)logoutMinutes * 60UL * 1000UL)
 static char sessionToken[SESSION_TOKEN_LEN + 1] = {0};
 static unsigned long sessionLastActivity = 0;
+
+static void hashApiToken(const char* token, uint8_t* hash) {
+    SHA256Builder sha256;
+    sha256.begin();
+    sha256.add((const uint8_t *)token, API_TOKEN_LEN);
+    sha256.calculate();
+    sha256.getBytes(hash);
+}
 
 static void generateToken() {
     const char hex[] = "0123456789abcdef";
@@ -47,7 +61,7 @@ static void generateToken() {
     sessionToken[SESSION_TOKEN_LEN] = '\0';
 }
 
-static bool isAuthorised(httpd_req_t *req) {
+static bool isBrowserAuthorised(httpd_req_t *req) {
     if (sessionToken[0] == '\0') return false;
     char buf[SESSION_TOKEN_LEN + 1] = {0};
     if (httpd_req_get_hdr_value_str(req, "X-Auth-Token", buf, sizeof(buf)) != ESP_OK)
@@ -63,6 +77,27 @@ static bool isAuthorised(httpd_req_t *req) {
     }
     sessionLastActivity = millis();
     return true;
+}
+
+static bool isApiKeyAuthorised(httpd_req_t *req) {
+    char token[API_TOKEN_LEN + 1] = {0};
+    if (httpd_req_get_hdr_value_str(req, "X-API-Key", token, sizeof(token)) != ESP_OK)
+        return false;
+    if (strlen(token) != API_TOKEN_LEN) return false;
+    uint8_t hash[API_TOKEN_HASH_LEN] = {0};
+    hashApiToken(token, hash);
+    for (int slot = 0; slot < API_TOKEN_MAX; slot++) {
+        if (apiTokenNames[slot][0] == '\0') continue;
+        uint8_t diff = 0;
+        for (int i = 0; i < API_TOKEN_HASH_LEN; i++)
+            diff |= hash[i] ^ apiTokenHashes[slot][i];
+        if (diff == 0) return true;
+    }
+    return false;
+}
+
+static bool isAuthorised(httpd_req_t *req) {
+    return isBrowserAuthorised(req) || isApiKeyAuthorised(req);
 }
 
 static esp_err_t sendUnauthorised(httpd_req_t *req) {
@@ -207,6 +242,91 @@ char* apiAuthSetInitialPasswordHandlerHook(httpd_req_t *req) {
         saveAdminPassword(password->valuestring, true);
         cJSON_AddBoolToObject(response, "success", true);
         cJSON_AddStringToObject(response, "message", "Admin password configured");
+    }
+    if (json) cJSON_Delete(json);
+    char *out = cJSON_Print(response);
+    cJSON_Delete(response);
+    return out;
+}
+
+char* apiAuthApiTokenGenerateHandlerHook(httpd_req_t *req) {
+    if (!isBrowserAuthorised(req)) { sendUnauthorised(req); return nullptr; }
+
+    char* jsonData = getContentFromReq(req);
+    cJSON *json = jsonData ? cJSON_Parse(jsonData) : NULL;
+    free(jsonData);
+    cJSON *name_j = json ? cJSON_GetObjectItem(json, "name") : NULL;
+    int slot = -1;
+    if (cJSON_IsString(name_j) && strlen(name_j->valuestring) >= 1 && strlen(name_j->valuestring) <= API_TOKEN_NAME_LEN) {
+        for (int i = 0; i < API_TOKEN_MAX; i++) {
+            if (apiTokenNames[i][0] == '\0') { slot = i; break; }
+        }
+    }
+    if (slot < 0) {
+        cJSON *response = cJSON_CreateObject();
+        cJSON_AddBoolToObject(response, "success", false);
+        cJSON_AddStringToObject(response, "message", name_j == NULL ? "Token name required" : "All token slots are full or the name is invalid");
+        if (json) cJSON_Delete(json);
+        char *out = cJSON_Print(response);
+        cJSON_Delete(response);
+        return out;
+    }
+
+    const char hex[] = "0123456789abcdef";
+    char token[API_TOKEN_LEN + 1] = {0};
+    for (int i = 0; i < API_TOKEN_LEN; i++) token[i] = hex[esp_random() % 16];
+    uint8_t hash[API_TOKEN_HASH_LEN] = {0};
+    hashApiToken(token, hash);
+    saveApiTokenSlot((uint8_t)slot, hash, name_j->valuestring);
+    cJSON_Delete(json);
+
+    cJSON *response = cJSON_CreateObject();
+    cJSON_AddBoolToObject(response, "success", true);
+    cJSON_AddNumberToObject(response, "slot", slot);
+    cJSON_AddStringToObject(response, "name", apiTokenNames[slot]);
+    cJSON_AddStringToObject(response, "token", token);
+    cJSON_AddStringToObject(response, "message", "Copy this token now. It will not be shown again.");
+    char *out = cJSON_Print(response);
+    cJSON_Delete(response);
+    return out;
+}
+
+char* apiAuthApiTokenStatusHandlerHook(httpd_req_t *req) {
+    if (!isBrowserAuthorised(req)) { sendUnauthorised(req); return nullptr; }
+    cJSON *response = cJSON_CreateObject();
+    cJSON_AddBoolToObject(response, "success", true);
+    cJSON *tokens = cJSON_AddArrayToObject(response, "tokens");
+    for (int slot = 0; slot < API_TOKEN_MAX; slot++) {
+        if (apiTokenNames[slot][0] == '\0') continue;
+        cJSON *token = cJSON_CreateObject();
+        cJSON_AddNumberToObject(token, "slot", slot);
+        cJSON_AddStringToObject(token, "name", apiTokenNames[slot]);
+        cJSON_AddItemToArray(tokens, token);
+    }
+    cJSON_AddNumberToObject(response, "capacity", API_TOKEN_MAX);
+    char *out = cJSON_Print(response);
+    cJSON_Delete(response);
+    return out;
+}
+
+char* apiAuthApiTokenRevokeHandlerHook(httpd_req_t *req) {
+    if (!isBrowserAuthorised(req)) { sendUnauthorised(req); return nullptr; }
+    char* jsonData = getContentFromReq(req);
+    cJSON *json = jsonData ? cJSON_Parse(jsonData) : NULL;
+    free(jsonData);
+    cJSON *slot_j = json ? cJSON_GetObjectItem(json, "slot") : NULL;
+    int slot = cJSON_IsNumber(slot_j) ? slot_j->valueint : -1;
+    cJSON *response = cJSON_CreateObject();
+    if (slot < 0 || slot >= API_TOKEN_MAX || apiTokenNames[slot][0] == '\0') {
+        cJSON_AddBoolToObject(response, "success", false);
+        cJSON_AddStringToObject(response, "message", "Valid active token slot required");
+    } else {
+        char revokedName[API_TOKEN_NAME_LEN + 1] = {0};
+        strncpy(revokedName, apiTokenNames[slot], API_TOKEN_NAME_LEN);
+        clearApiTokenSlot((uint8_t)slot);
+        cJSON_AddBoolToObject(response, "success", true);
+        cJSON_AddStringToObject(response, "message", "API token revoked");
+        cJSON_AddStringToObject(response, "name", revokedName);
     }
     if (json) cJSON_Delete(json);
     char *out = cJSON_Print(response);
@@ -592,6 +712,7 @@ char* apiRebootHandlerHook(httpd_req_t *req) {
 
 // GET /api/devices
 char* apiDevicesHandlerHook(httpd_req_t *req) {
+    if (!isAuthorised(req)) { sendUnauthorised(req); return nullptr; }
     cJSON *response = cJSON_CreateObject();
     cJSON *list = cJSON_CreateArray();
     for (uint8_t i = 0; i < deviceCount; i++) {
