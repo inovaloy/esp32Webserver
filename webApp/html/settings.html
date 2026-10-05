@@ -336,17 +336,50 @@
         const result = await api.getWiFiStatus();
         if (result.success && result.data.connected) {
             settingsWifiStatus.className = 'status-card-wifi status-card-connected';
-            const signal = result.data.network === 'WiFi' && result.data.rssi !== undefined
-                ? '<div class="settings-network-detail"><span>Signal</span><strong>' + escSettings(result.data.rssi) + ' dBm</strong></div>'
-                : '';
-            settingsWifiStatus.innerHTML = '<div class="settings-network-summary"><strong>' + escSettings(result.data.network) + ' connected</strong><span>Active connection</span></div>' +
-                '<div class="settings-network-details">' +
-                '<div class="settings-network-detail"><span>SSID</span><strong>' + escSettings(result.data.ssid || result.data.network) + '</strong></div>' +
-                '<div class="settings-network-detail"><span>IP address</span><strong>' + escSettings(result.data.ip) + '</strong></div>' +
-                '<div class="settings-network-detail"><span>MAC address</span><strong>' + escSettings(result.data.mac || 'Unavailable') + '</strong></div>' +
-                '<div class="settings-network-detail"><span>Gateway</span><strong>' + escSettings(result.data.gateway || 'Unavailable') + '</strong></div>' +
-                '<div class="settings-network-detail"><span>Subnet</span><strong>' + escSettings(result.data.subnet || 'Unavailable') + '</strong></div>' +
-                signal + '</div>';
+            const data = result.data;
+            const networks = [];
+            if (data.ethernet_connected || data.ethernet_ip) {
+                networks.push({
+                    name: 'Ethernet',
+                    details: [
+                        ['IP address', data.ethernet_ip],
+                        ['MAC address', data.ethernet_mac],
+                        ['Gateway', data.ethernet_gateway],
+                        ['Subnet', data.ethernet_subnet]
+                    ]
+                });
+            }
+            if (data.wifi_connected || data.wifi_ip) {
+                const details = [
+                    ['SSID', data.wifi_ssid || data.ssid],
+                    ['IP address', data.wifi_ip],
+                    ['MAC address', data.wifi_mac],
+                    ['Gateway', data.wifi_gateway],
+                    ['Subnet', data.wifi_subnet]
+                ];
+                if (data.wifi_rssi !== undefined || data.rssi !== undefined) {
+                    details.push(['Signal', (data.wifi_rssi ?? data.rssi) + ' dBm']);
+                }
+                networks.push({ name: 'Wi-Fi', details });
+            }
+            if (!networks.length) {
+                networks.push({
+                    name: data.network,
+                    details: [
+                        ['SSID', data.ssid || data.network],
+                        ['IP address', data.ip],
+                        ['MAC address', data.mac],
+                        ['Gateway', data.gateway],
+                        ['Subnet', data.subnet]
+                    ]
+                });
+            }
+            settingsWifiStatus.innerHTML = networks.map(network =>
+                '<div class="settings-network-interface"><div class="settings-network-summary"><strong>' + escSettings(network.name) + ' connected</strong><span>Connected</span></div>' +
+                '<div class="settings-network-details">' + network.details.map(detail =>
+                    '<div class="settings-network-detail"><span>' + escSettings(detail[0]) + '</span><strong>' + escSettings(detail[1] || 'Unavailable') + '</strong></div>'
+                ).join('') + '</div></div>'
+            ).join('');
         } else {
             settingsWifiStatus.className = 'status-card-wifi status-card-disconnected';
             settingsWifiStatus.innerHTML = '<strong>Not connected</strong><span>Connect through Wi-Fi or Ethernet to see network details.</span>';

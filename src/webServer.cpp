@@ -554,11 +554,21 @@ char* apiWifiStatusHandlerHook(httpd_req_t *req) {
     bool ethernetConnected = ETH.hasIP();
     bool wifiConnected = WiFi.status() == WL_CONNECTED;
     cJSON_AddBoolToObject(response, "connected", ethernetConnected || wifiConnected);
+    cJSON_AddBoolToObject(response, "ethernet_connected", ethernetConnected);
+    cJSON_AddBoolToObject(response, "wifi_connected", wifiConnected);
     if (ethernetConnected) {
         cJSON_AddStringToObject(response, "ethernet_ip", ETH.localIP().toString().c_str());
+        cJSON_AddStringToObject(response, "ethernet_mac", ETH.macAddress().c_str());
+        cJSON_AddStringToObject(response, "ethernet_gateway", ETH.gatewayIP().toString().c_str());
+        cJSON_AddStringToObject(response, "ethernet_subnet", ETH.subnetMask().toString().c_str());
     }
     if (wifiConnected) {
         cJSON_AddStringToObject(response, "wifi_ip", WiFi.localIP().toString().c_str());
+        cJSON_AddStringToObject(response, "wifi_ssid", WiFi.SSID().c_str());
+        cJSON_AddStringToObject(response, "wifi_mac", WiFi.macAddress().c_str());
+        cJSON_AddStringToObject(response, "wifi_gateway", WiFi.gatewayIP().toString().c_str());
+        cJSON_AddStringToObject(response, "wifi_subnet", WiFi.subnetMask().toString().c_str());
+        cJSON_AddNumberToObject(response, "wifi_rssi", WiFi.RSSI());
         cJSON_AddStringToObject(response, "ssid", WiFi.SSID().c_str());
         cJSON_AddNumberToObject(response, "rssi", WiFi.RSSI());
     }
