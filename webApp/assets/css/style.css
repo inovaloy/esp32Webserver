@@ -1343,6 +1343,11 @@ body {
 }
 .settings-network-summary span,
 .settings-network-detail span { color: var(--text-muted); font-size: 12px; }
+.settings-network-interface + .settings-network-interface {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+}
 .settings-network-details {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
