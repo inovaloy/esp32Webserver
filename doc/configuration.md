@@ -199,6 +199,9 @@ Calls a hook function in `webServer.cpp` and returns the JSON string it produces
 | `/api/logout` | POST | JSON | Invalidate session token |
 | `/api/auth/change-password` | POST | JSON | Change admin password |
 | `/api/auth/set-initial-password` | POST | JSON | Set password on first boot |
+| `/api/auth/api-token/generate` | POST | JSON | Generate a long-lived API key (browser session only) |
+| `/api/auth/api-token/status` | GET | JSON | List active API key slots (browser session only) |
+| `/api/auth/api-token/revoke` | POST | JSON | Revoke an API key slot (browser session only) |
 | `/api/wifi/status` | GET | JSON | Current network status |
 | `/api/wifi/scan` | GET | JSON | Scan for Wi-Fi networks |
 | `/api/wifi/connect` | POST | JSON | Connect to a Wi-Fi network |

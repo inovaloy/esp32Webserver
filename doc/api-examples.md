@@ -219,7 +219,118 @@ curl -s -X POST http://192.168.1.42/api/auth/api-token/revoke \
 
 ## 4. Listing and Reading Devices
 
-Get all devices and their current ON/OFF states — **no authentication required**.
+The easiest way is via the web UI: **Settings → Security → Local API access → Generate API Token**. Copy the token immediately — it is shown only once.
+
+To generate programmatically from a script (requires a browser session):
+
+### Python — generate, save, then use
+
+```python
+import requests
+import json
+import os
+
+HUB      = "http://192.168.1.42"
+PASSWORD = "your-admin-password"
+KEY_FILE = "hub_api_key.json"   # store the key locally
+
+# Step 1: log in with the browser session
+login = requests.post(f"{HUB}/api/login", json={"password": PASSWORD}).json()
+if not login["success"]:
+    raise RuntimeError("Login failed: " + login["message"])
+session_token = login["token"]
+session_headers = {"X-Auth-Token": session_token}
+
+# Step 2: generate an API key
+gen = requests.post(
+    f"{HUB}/api/auth/api-token/generate",
+    headers=session_headers,
+    json={"name": "My Script"}
+).json()
+
+if not gen["success"]:
+    raise RuntimeError("Token generation failed: " + gen["message"])
+
+api_key = gen["token"]
+print(f"Generated token in slot {gen['slot']} ({gen['name']})")
+print("Save this — it will NOT be shown again:", api_key)
+
+# Save it locally for future use
+with open(KEY_FILE, "w") as f:
+    json.dump({"api_key": api_key, "slot": gen["slot"], "name": gen["name"]}, f)
+
+# Step 3: log out the session (API key is now active independently)
+requests.post(f"{HUB}/api/logout", headers=session_headers)
+
+# Step 4: from now on, use the API key directly — no login needed
+resp = requests.get(f"{HUB}/api/devices", headers={"X-API-Key": api_key})
+print(resp.json())
+```
+
+### Python — list active API token slots
+
+```python
+import requests
+
+HUB           = "http://192.168.1.42"
+SESSION_TOKEN = "a3f2e1c9..."   # must be a browser session token
+
+resp = requests.get(
+    f"{HUB}/api/auth/api-token/status",
+    headers={"X-Auth-Token": SESSION_TOKEN}
+)
+data = resp.json()
+print(f"Slots used: {len(data['tokens'])} / {data['capacity']}")
+for t in data["tokens"]:
+    print(f"  Slot {t['slot']}: {t['name']}")
+```
+
+### Python — revoke an API token
+
+```python
+import requests
+
+HUB           = "http://192.168.1.42"
+SESSION_TOKEN = "a3f2e1c9..."
+
+resp = requests.post(
+    f"{HUB}/api/auth/api-token/revoke",
+    headers={"X-Auth-Token": SESSION_TOKEN},
+    json={"slot": 0}
+)
+print(resp.json()["message"])   # "API token revoked"
+```
+
+### curl — generate
+
+```bash
+curl -s -X POST http://192.168.1.42/api/auth/api-token/generate \
+  -H "Content-Type: application/json" \
+  -H "X-Auth-Token: <session-token>" \
+  -d '{"name": "Night script"}'
+```
+
+### curl — list slots
+
+```bash
+curl -s http://192.168.1.42/api/auth/api-token/status \
+  -H "X-Auth-Token: <session-token>"
+```
+
+### curl — revoke slot 0
+
+```bash
+curl -s -X POST http://192.168.1.42/api/auth/api-token/revoke \
+  -H "Content-Type: application/json" \
+  -H "X-Auth-Token: <session-token>" \
+  -d '{"slot": 0}'
+```
+
+---
+
+## 4. Listing and Reading Devices
+
+Get all devices and their current ON/OFF states — **authentication required** (`X-Auth-Token` or `X-API-Key`).
 
 ### Python
 
@@ -227,8 +338,9 @@ Get all devices and their current ON/OFF states — **no authentication required
 import requests
 
 HUB = "http://192.168.1.42"
+TOKEN = "a3f2e1c9b8d7e6f5a4b3c2d1e0f9a8b7"
 
-resp = requests.get(f"{HUB}/api/devices")
+resp = requests.get(f"{HUB}/api/devices", headers={"X-Auth-Token": TOKEN})
 data = resp.json()
 
 print(f"Total devices: {data['count']}")
@@ -249,7 +361,8 @@ Total devices: 3
 ### curl
 
 ```bash
-curl -s http://192.168.1.42/api/devices
+curl -s http://192.168.1.42/api/devices \
+  -H "X-Auth-Token: a3f2e1c9b8d7e6f5a4b3c2d1e0f9a8b7"
 ```
 
 ---
@@ -292,7 +405,7 @@ TOKEN = "a3f2e1c9b8d7e6f5a4b3c2d1e0f9a8b7"
 
 def find_device_by_name(name):
     """Returns the device index, or None if not found."""
-    resp = requests.get(f"{HUB}/api/devices")
+    resp = requests.get(f"{HUB}/api/devices", headers={"X-Auth-Token": TOKEN})
     devices = resp.json().get("devices", [])
     for d in devices:
         if d["name"].lower() == name.lower():
@@ -340,7 +453,7 @@ HUB = "http://192.168.1.42"
 TOKEN = "a3f2e1c9b8d7e6f5a4b3c2d1e0f9a8b7"
 
 # Get current device list
-devices = requests.get(f"{HUB}/api/devices").json().get("devices", [])
+devices = requests.get(f"{HUB}/api/devices", headers={"X-Auth-Token": TOKEN}).json().get("devices", [])
 
 for device in devices:
     if device["state"]:  # only toggle devices that are currently ON
@@ -373,7 +486,7 @@ TOKEN = login_data["token"]
 HEADERS = {"X-Auth-Token": TOKEN}
 
 # Step 2: Get all devices
-devices = requests.get(f"{HUB}/api/devices").json().get("devices", [])
+devices = requests.get(f"{HUB}/api/devices", headers=HEADERS).json().get("devices", [])
 
 # Step 3: Turn each OFF
 for device in devices:
@@ -426,7 +539,7 @@ HUB   = "http://192.168.1.42"
 TOKEN = "a3f2e1c9b8d7e6f5a4b3c2d1e0f9a8b7"
 
 def remove_device_by_name(name):
-    devices = requests.get(f"{HUB}/api/devices").json().get("devices", [])
+    devices = requests.get(f"{HUB}/api/devices", headers={"X-Auth-Token": TOKEN}).json().get("devices", [])
     for d in devices:
         if d["name"].lower() == name.lower():
             resp = requests.post(
@@ -657,7 +770,7 @@ class DeviceHub:
 
     # ── Devices ───────────────────────────────────────────────────────────
     def get_devices(self):
-        return requests.get(f"{self.host}/api/devices").json().get("devices", [])
+        return self._get("/api/devices").get("devices", [])
 
     def turn_on(self, index: int):
         return self._post("/api/devices/toggle", {"index": index, "state": True})
@@ -776,7 +889,7 @@ hub.logout()
 | Action | curl command |
 |---|---|
 | Login (get session token) | `curl -s -X POST http://HUB/api/login -H "Content-Type: application/json" -d '{"password":"PASS"}'` |
-| List devices (no auth) | `curl -s http://HUB/api/devices` |
+| List devices | `curl -s http://HUB/api/devices -H "X-API-Key: APIKEY"` |
 | Turn device 0 ON (session) | `curl -s -X POST http://HUB/api/devices/toggle -H "Content-Type: application/json" -H "X-Auth-Token: SESSION" -d '{"index":0,"state":true}'` |
 | Turn device 0 ON (API key) | `curl -s -X POST http://HUB/api/devices/toggle -H "Content-Type: application/json" -H "X-API-Key: APIKEY" -d '{"index":0,"state":true}'` |
 | Turn device 0 OFF (API key) | `curl -s -X POST http://HUB/api/devices/toggle -H "Content-Type: application/json" -H "X-API-Key: APIKEY" -d '{"index":0,"state":false}'` |
